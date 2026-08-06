@@ -1,0 +1,123 @@
+# =============================================================
+# SATA - Vector.dev config
+# Membaca log DNS Mikrotik hasil syslog-ng, parsing ke JSON,
+# batching, lalu POST ke webhook n8n.
+# =============================================================
+
+[sources.mikrotik_dns_file]
+type = "file"
+include = ["/var/log/mikrotik-dns.log"]
+read_from = "end"
+
+# --- Transform: parsing raw syslog line jadi field terstruktur ---
+# Contoh baris mentah yang diharapkan (format bisa berbeda tergantung versi
+# RouterOS - WAJIB dicek ulang dengan sample asli, lihat TESTING.md bagian 3):
+#   192.168.10.1 dns,packet query from 192.168.10.45:38291: #57 youtube.com. A
+[transforms.parse_dns]
+type = "remap"
+inputs = ["mikrotik_dns_file"]
+source = '''
+raw = .message
+
+# ambil IP pengirim syslog (router/AP) yang ditaruh di depan oleh syslog-ng
+parts, err = parse_regex(raw, r'^(?P<ap_ip>\d{1,3}(\.\d{1,3}){3})\s+(?P<rest>.*)$')
+if err == null {
+    .ap_ip = parts.ap_ip
+    .ap_name = parts.ap_ip   # sementara pakai IP, ganti via enrichment/lookup table nanti
+    body = parts.rest
+} else {
+    body = raw
+    .ap_name = "unknown"
+}
+
+# ambil client_ip dan domain dari isi log DNS Mikrotik
+dns_parts, err2 = parse_regex(body, r'query from (?P<client_ip>\d{1,3}(\.\d{1,3}){3}):?\d*:\s*#?\d*\s*(?P<domain>[a-zA-Z0-9\-\.\_]+\.)')
+if err2 == null {
+    .client_ip = dns_parts.client_ip
+    .domain = strip_whitespace(rtrim(dns_parts.domain, "."))
+} else {
+    # tidak match pola DNS query yang diharapkan -> tandai untuk investigasi,
+    # tapi tetap diteruskan (jangan drop diam-diam)
+    .parse_error = true
+    .domain = null
+    .client_ip = null
+}
+
+.timestamp = now()
+.source_type = "mikrotik_dns"
+'''
+
+# Buang baris yang bukan log DNS query (mis. baris kosong/log topic lain)
+[transforms.filter_valid]
+type = "filter"
+inputs = ["parse_dns"]
+condition = '.domain != null && .client_ip != null'
+
+# --- Sink: kirim batch ke n8n webhook ---
+[sinks.n8n_webhook]
+type = "http"
+inputs = ["filter_valid"]
+uri = "${N8N_WEBHOOK_URL}"
+method = "post"
+encoding.codec = "json"
+compression = "none"
+
+# batching supaya tidak POST per-query (bisa ribuan/menit)
+batch.max_events = 500
+batch.timeout_secs = 45
+
+request.headers.Content-Type = "application/json"
+request.headers.X-SATA-Token = "${SATA_WEBHOOK_TOKEN}"
+
+# retry otomatis kalau n8n down sementara -> data tidak hilang, cukup nunggu
+request.retry_attempts = 10
+request.retry_initial_backoff_secs = 5
+request.retry_max_duration_secs = 3600
+
+# --- Sink: simpan tiap event sebagai time series di InfluxDB ---
+# Setiap log DNS query masuk sebagai satu data point dengan timestamp asli
+# (bukan cuma dikirim sekali batch ke n8n) - jadi bisa dikueri per rentang
+# waktu nanti (mis. "trafik AP-Lantai2 jam 19:00-20:00" atau bikin grafik
+# tren per jam/hari di Grafana/Chronograf).
+[sinks.influxdb_timeseries]
+type = "influxdb_logs"
+inputs = ["filter_valid"]
+endpoint = "http://influxdb:8086"
+org = "${INFLUXDB_ORG}"
+bucket = "${INFLUXDB_BUCKET}"
+token = "${INFLUXDB_TOKEN}"
+measurement = "dns_query"
+
+# field-field ini dipromosikan jadi InfluxDB tag (indexed, dipakai buat filter/group by)
+tags = ["ap_name", "ap_ip", "domain"]
+
+# hanya field ini yang ikut disimpan sebagai field/value di InfluxDB
+# (client_ip sengaja jadi field bukan tag, karena cardinality-nya tinggi -
+# kalau dijadikan tag bisa bikin index InfluxDB membengkak)
+encoding.only_fields = ["timestamp", "client_ip", "source_type"]
+
+# batching terpisah dari sink webhook - InfluxDB kuat nerima write lebih sering
+batch.max_events = 1000
+batch.timeout_secs = 20
+
+request.retry_attempts = 10
+request.retry_initial_backoff_secs = 5
+
+# --- Sink tambahan (opsional tapi disarankan untuk debugging awal) ---
+# Menulis juga ke stdout supaya gampang lihat hasil parsing saat testing
+[sinks.debug_console]
+type = "console"
+inputs = ["filter_valid"]
+encoding.codec = "json"
+
+# Sink khusus untuk baris yang GAGAL diparse -> supaya kelihatan kalau
+# regex perlu disesuaikan dengan format log RouterOS versi kalian
+[transforms.filter_errors]
+type = "filter"
+inputs = ["parse_dns"]
+condition = '.parse_error == true'
+
+[sinks.parse_error_console]
+type = "console"
+inputs = ["filter_errors"]
+encoding.codec = "json"
