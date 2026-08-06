@@ -1,0 +1,54 @@
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Docker
+*.log
+docker-data/
+volumes/
+**/data/
+**/db/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+build/
+coverage/
+.npm/
+.pnpm-store/
+
+# n8n / workflow runtime
+.n8n/
+*.json.backup
+
+# Mongo / local dumps
+*.bson
+*.dump
+*.gz
+
+# Secrets / credentials
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# IDE / editor
+.vscode/
+.idea/
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+
+# Local data
+*.sqlite
+*.sqlite3
+*.db

@@ -1,0 +1,50 @@
+version: "3.9"
+
+services:
+  mongo:
+    image: mongo:7.0
+    container_name: sata-mongo
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:-sata}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-sata123}
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+
+  n8n:
+    image: n8nio/n8n:1.61.0
+    container_name: sata-n8n
+    restart: unless-stopped
+    depends_on:
+      - mongo
+    ports:
+      - "5678:5678"
+    environment:
+      N8N_HOST: ${N8N_HOST:-localhost}
+      N8N_PORT: 5678
+      N8N_PROTOCOL: http
+      NODE_ENV: production
+      DB_TYPE: sqlite
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-changeme}
+      WEBHOOK_URL: ${N8N_WEBHOOK_URL:-http://localhost:5678/}
+      GENERIC_TIMEZONE: Asia/Jakarta
+    volumes:
+      - n8n-data:/home/node/.n8n
+
+  vector:
+    image: timberio/vector:0.38.0-debian
+    container_name: sata-vector
+    restart: unless-stopped
+    ports:
+      - "8686:8686"
+    volumes:
+      - ../log-parser/vector.toml:/etc/vector/vector.toml:ro
+      - vector-data:/var/lib/vector
+    command: ["--config", "/etc/vector/vector.toml"]
+
+volumes:
+  mongo-data:
+  n8n-data:
+  vector-data:
