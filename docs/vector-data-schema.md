@@ -18,7 +18,7 @@ Dokumen ini menjelaskan struktur data, spesifikasi JSON payload, tipe data, cont
    - **Jumlah Event**: Maksimal **100 event** per batch (`batch.max_events = 100`).
    - **Batas Waktu (Timeout)**: Maksimal **10 detik** (`batch.timeout_secs = 10`). Mana pun yang tercapai lebih dulu akan memicu pengiriman HTTP POST.
 3. **Keamanan (Authentication Header)**:
-   Vector menyertakan kustom header `X-SATA-Token` pada setiap request untuk memvalidasi bahwa payload benar-benar berasal dari Vector resmi.
+   Vector menyertakan kustom header `X-SATA-Token` pada setiap request untuk memvalidasi bahwa payload benar-benar berasal dari vector resmi.
 
 ---
 
