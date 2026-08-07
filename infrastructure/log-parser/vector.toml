@@ -27,19 +27,20 @@ raw = string(.message) ?? ""
 dns_parts, err = parse_regex(raw, r'query from (?P<client_ip>\d{1,3}(\.\d{1,3}){3}):?\d*:\s*#?\d*\s*(?P<domain>[a-zA-Z0-9\-\.\_]+)')
 if err == null {
     .client_ip = dns_parts.client_ip
-    .domain = string(dns_parts.domain) ?? ""
+    # Gantikan trailing dot menggunakan replace regex
+    .domain = replace(string(dns_parts.domain) ?? "", r'\.$', "")
 } else {
     # Pola 2: Format DNS packet question ("dns,packet question: s.youtube.com:A:IN")
     dns_parts2, err2 = parse_regex(raw, r'dns,packet question:\s*(?P<domain>[a-zA-Z0-9\-\.\_]+):[A-Z]+:[A-Z]+')
     if err2 == null {
         .client_ip = string(.host) ?? "unknown"
-        .domain = string(dns_parts2.domain) ?? ""
+        .domain = replace(string(dns_parts2.domain) ?? "", r'\.$', "")
     } else {
         # Pola 3: Format alternatif ("query[A] youtube.com from 192.168.10.45")
         dns_parts3, err3 = parse_regex(raw, r'query\[[A-Z]+\]\s+(?P<domain>[a-zA-Z0-9\-\.\_]+)\s+from\s+(?P<client_ip>\d{1,3}(\.\d{1,3}){3})')
         if err3 == null {
             .client_ip = dns_parts3.client_ip
-            .domain = string(dns_parts3.domain) ?? ""
+            .domain = replace(string(dns_parts3.domain) ?? "", r'\.$', "")
         } else {
             .parse_error = true
             .domain = null
@@ -48,16 +49,17 @@ if err == null {
     }
 }
 
-# Bersihkan metadata internal yang tidak diperlukan oleh n8n
+# Bersihkan field ekstra yang tidak ada dalam skema spesifikasi SATA
 del(.host)
 del(.port)
 del(.parse_error)
+del(.message)
 
 .timestamp = now()
 .source_type = "mikrotik_dns"
 '''
 
-# Buang event yang tidak memuat domain dan client_ip valid (seperti log answer, done query, dll)
+# Buang event yang tidak memuat domain dan client_ip valid
 [transforms.filter_valid]
 type = "filter"
 inputs = ["parse_dns"]
