@@ -1,15 +1,43 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
+  /* Soft light surfaces — calm and easy on the eyes */
+  --background: #f0f4f8;
+  --surface: #ffffff;
+  --surface-2: #e8eef4;
+  --line: #c8d8e8;
+
+  /* Text tones */
+  --chalk: #2d3f50;
+  --chalk-dim: #5a7080;
+  --chalk-faint: #8fa8bc;
+
+  /* Status accents (mapped to domain risk, not decoration) */
+  --accent-safe: #3a9e6e;
+  --accent-safe-bg: rgba(58, 158, 110, 0.10);
+  --accent-watch: #c8860a;
+  --accent-watch-bg: rgba(200, 134, 10, 0.10);
+  --accent-flag: #c0394a;
+  --accent-flag-bg: rgba(192, 57, 74, 0.10);
+
+  --foreground: var(--chalk);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--line);
+  --color-chalk: var(--chalk);
+  --color-chalk-dim: var(--chalk-dim);
+  --color-chalk-faint: var(--chalk-faint);
+  --color-safe: var(--accent-safe);
+  --color-watch: var(--accent-watch);
+  --color-flag: var(--accent-flag);
+  --font-sans: var(--font-body);
+  --font-display: var(--font-display);
+  --font-data: var(--font-data);
 }
 
 * {
@@ -19,7 +47,23 @@
 body {
   margin: 0;
   min-height: 100vh;
-  background: var(--background);
+  background:
+    radial-gradient(circle at 12% 0%, rgba(58, 158, 110, 0.07), transparent 40%),
+    radial-gradient(circle at 88% 100%, rgba(99, 140, 200, 0.06), transparent 40%),
+    var(--background);
   color: var(--foreground);
-  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  font-family: var(--font-body), Arial, Helvetica, sans-serif;
+}
+
+/* Subtle dot texture on panels */
+.chalk-surface {
+  background-image: radial-gradient(rgba(45, 63, 80, 0.04) 1px, transparent 1px);
+  background-size: 3px 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

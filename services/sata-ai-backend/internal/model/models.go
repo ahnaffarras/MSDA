@@ -1,0 +1,237 @@
+package model
+
+import (
+	"time"
+
+	"go.mongodb.org/mongo-driver/bson/primitive"
+)
+
+// ── Pagination ───────────────────────────────────────────────────────────────
+
+type Meta struct {
+	Page       int   `json:"page"`
+	Limit      int   `json:"limit"`
+	Total      int64 `json:"total"`
+	TotalPages int   `json:"total_pages"`
+}
+
+type ListResponse[T any] struct {
+	Data []T  `json:"data"`
+	Meta Meta `json:"meta"`
+}
+
+type DataResponse[T any] struct {
+	Data T `json:"data"`
+}
+
+type ErrorResponse struct {
+	Error string `json:"error"`
+}
+
+// ── Admin / Auth ─────────────────────────────────────────────────────────────
+
+type Admin struct {
+	ID           primitive.ObjectID `bson:"_id,omitempty"    json:"id"`
+	Username     string             `bson:"username"         json:"username"`
+	PasswordHash string             `bson:"password_hash"    json:"-"`
+	Role         string             `bson:"role"             json:"role"`
+	CreatedAt    time.Time          `bson:"created_at"       json:"created_at"`
+}
+
+type LoginRequest struct {
+	Username string `json:"username" binding:"required"`
+	Password string `json:"password" binding:"required"`
+}
+
+type LoginResponse struct {
+	Token string `json:"token"`
+	Admin Admin  `json:"admin"`
+}
+
+// ── DNS Info ─────────────────────────────────────────────────────────────────
+
+type IPScan struct {
+	IP   string `bson:"ip"   json:"ip"`
+	Type string `bson:"type" json:"type"`
+	Geo  string `bson:"geo"  json:"geo"`
+}
+
+type InfoApp struct {
+	Platform            []string `bson:"platform"             json:"platform"`
+	CompanyResponsible  string   `bson:"company_responsible"  json:"company_responsible"`
+	Owner               string   `bson:"owner"                json:"owner"`
+}
+
+type HostISP struct {
+	City   string `bson:"city"   json:"city"`
+	Region string `bson:"region" json:"region"`
+	Org    string `bson:"org"    json:"org"`
+	ASN    string `bson:"asn"    json:"asn"`
+}
+
+type DNSInfo struct {
+	ID           primitive.ObjectID `bson:"_id,omitempty"    json:"id"`
+	Domain       string             `bson:"domain"           json:"domain"`
+	Group        string             `bson:"group"            json:"group"`
+	Type         string             `bson:"type"             json:"type"`
+	InfoApp      InfoApp            `bson:"info_app"         json:"info_app"`
+	IPScan       []IPScan           `bson:"ip_scan"          json:"ip_scan"`
+	PTRHostname  string             `bson:"ptr_hostname"     json:"ptr_hostname"`
+	HostISP      HostISP            `bson:"host_isp"         json:"host_isp"`
+	LastVerified time.Time          `bson:"last_verified"    json:"last_verified"`
+	Timestamp    time.Time          `bson:"timestamp"        json:"timestamp"`
+}
+
+// ── DNS Blacklist ─────────────────────────────────────────────────────────────
+
+type DNSBlacklist struct {
+	ID           primitive.ObjectID `bson:"_id,omitempty"    json:"id"`
+	BlockedLevel string             `bson:"blocked_level"    json:"blocked_level"` // "domain" | "group"
+	Domain       string             `bson:"domain,omitempty" json:"domain,omitempty"`
+	Group        string             `bson:"group,omitempty"  json:"group,omitempty"`
+	Type         string             `bson:"type"             json:"type"` // gambling|adult|malware|phishing|crypto_miner|custom
+	IsActive     bool               `bson:"is_active"        json:"is_active"`
+	CreatedAt    time.Time          `bson:"created_at"       json:"created_at"`
+	UpdatedAt    time.Time          `bson:"updated_at"       json:"updated_at"`
+}
+
+type BlacklistRequest struct {
+	BlockedLevel string `json:"blocked_level" binding:"required,oneof=domain group"`
+	Domain       string `json:"domain"`
+	Group        string `json:"group"`
+	Type         string `json:"type" binding:"required,oneof=gambling adult malware phishing crypto_miner custom"`
+	IsActive     *bool  `json:"is_active"`
+}
+
+// ── Client Access DNS ─────────────────────────────────────────────────────────
+
+type APInfo struct {
+	Label string `bson:"label" json:"label"`
+	IP    string `bson:"ip"    json:"ip"`
+}
+
+type ClientAccessDNS struct {
+	ID          primitive.ObjectID `bson:"_id,omitempty"   json:"id"`
+	Timestamp   time.Time          `bson:"timestamp"       json:"timestamp"`
+	Domain      string             `bson:"domain"          json:"domain"`
+	Group       string             `bson:"group"           json:"group"`
+	Type        string             `bson:"type"            json:"type"`
+	Action      string             `bson:"action"          json:"action"` // "allowed" | "blocked"
+	ClientIP    string             `bson:"client_ip"       json:"client_ip"`
+	APInfo      APInfo             `bson:"ap_info"         json:"ap_info"`
+	AccessCount int                `bson:"access_count"    json:"access_count"`
+}
+
+// ── Notification ──────────────────────────────────────────────────────────────
+
+type NotificationClient struct {
+	IP          string `bson:"ip"           json:"ip"`
+	AccessCount int    `bson:"access_count" json:"access_count"`
+	APInfo      APInfo `bson:"ap_info"      json:"ap_info"`
+}
+
+type NotificationData struct {
+	Domain []string             `bson:"domain" json:"domain"`
+	Group  string               `bson:"group"  json:"group"`
+	Type   string               `bson:"type"   json:"type"`
+	Client []NotificationClient `bson:"client" json:"client"`
+}
+
+type Notification struct {
+	ID        primitive.ObjectID `bson:"_id,omitempty" json:"id"`
+	TypeSend  string             `bson:"type_send"     json:"type_send"` // "blacklist_alert" | "batch_summary"
+	Data      NotificationData   `bson:"data"          json:"data"`
+	IsRead    bool               `bson:"is_read"       json:"is_read"`
+	Timestamp time.Time          `bson:"timestamp"     json:"timestamp"`
+}
+
+// ── Webhook Payload (dari n8n) ────────────────────────────────────────────────
+
+type WebhookPayload struct {
+	TypeSend  string           `json:"type_send" binding:"required,oneof=blacklist_alert batch_summary"`
+	Data      NotificationData `json:"data"`
+	Timestamp time.Time        `json:"timestamp"`
+}
+
+// ── Dashboard Summary ─────────────────────────────────────────────────────────
+
+type DashboardSummary struct {
+	TotalQueries      int64  `json:"total_queries"`
+	UniqueDomains     int64  `json:"unique_domains"`
+	NewDomains        int64  `json:"new_domains"`
+	BlacklistHits     int64  `json:"blacklist_hits"`
+	BlacklistClients  int64  `json:"blacklist_clients"`
+	CachedResponses   int64  `json:"cached_responses"`
+	Range             string `json:"range"`
+}
+
+// ── Lab Grid ──────────────────────────────────────────────────────────────────
+
+type LabClient struct {
+	ClientIP    string    `json:"client_ip"`
+	LastDomain  string    `json:"last_domain"`
+	LastAction  string    `json:"last_action"`
+	LastSeen    time.Time `json:"last_seen"`
+	RiskLevel   string    `json:"risk_level"`
+}
+
+type LabGridAP struct {
+	APLabel  string      `json:"ap_label"`
+	APIP     string      `json:"ap_ip"`
+	Clients  []LabClient `json:"clients"`
+}
+
+// ── Access Point ──────────────────────────────────────────────────────────────
+
+type AccessPoint struct {
+	Label        string `json:"label"`
+	IP           string `json:"ip"`
+	ActiveClients int   `json:"active_clients"`
+}
+
+// ── Top Domain / Client ───────────────────────────────────────────────────────
+
+type TopDomain struct {
+	Domain string `json:"domain"`
+	Group  string `json:"group"`
+	Type   string `json:"type"`
+	Count  int64  `json:"count"`
+}
+
+type TopClient struct {
+	ClientIP       string `json:"client_ip"`
+	APLabel        string `json:"ap_label"`
+	BlacklistHits  int64  `json:"blacklist_hits"`
+}
+
+// ── Client Access Stats ───────────────────────────────────────────────────────
+
+type AccessStatDay struct {
+	Date  string `json:"date"`
+	Count int64  `json:"count"`
+}
+
+type AccessStatType struct {
+	Type  string `json:"type"`
+	Count int64  `json:"count"`
+}
+
+type AccessStatAP struct {
+	APLabel string `json:"ap_label"`
+	APIP    string `json:"ap_ip"`
+	Count   int64  `json:"count"`
+}
+
+type ClientAccessStats struct {
+	PerDay  []AccessStatDay  `json:"per_day"`
+	PerType []AccessStatType `json:"per_type"`
+	PerAP   []AccessStatAP   `json:"per_ap"`
+}
+
+// ── WebSocket Event ───────────────────────────────────────────────────────────
+
+type WSEvent struct {
+	Event     string      `json:"event"`
+	Data      interface{} `json:"data"`
+	Timestamp time.Time   `json:"timestamp"`
+}

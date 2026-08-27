@@ -1,115 +1,146 @@
-import { ArrowUpRight, ChartBar, Globe, Shield } from "@gravity-ui/icons";
+import { CircleInfo, Cpus, Display, Bell } from "@gravity-ui/icons";
+import Link from "next/link";
+import { StatCard } from "@/components/StatCard";
+import { TopDomains } from "@/components/TopDomains";
+import { AlertsFeed } from "@/components/AlertsFeed";
+import { ActivityLog } from "@/components/ActivityLog";
+import { LabTabs } from "@/components/LabTabs";
+import {
+  fetchSummary,
+  fetchLabGrid,
+  fetchTopDomains,
+  fetchNotifications,
+  ACCESS_POINTS,
+  LAB_SEATS,
+  seatsForLab,
+} from "@/lib/api";
 
-const stats = [
-  { label: "Active APs", value: "12", detail: "+3 this week" },
-  { label: "Unique clients", value: "184", detail: "Peak at 18:00" },
-  { label: "Top domain", value: "youtube.com", detail: "38% of traffic" },
-];
+export const dynamic = "force-dynamic";
 
-const domains = [
-  { name: "youtube.com", share: 38, color: "from-sky-500 to-cyan-400" },
-  { name: "tiktok.com", share: 24, color: "from-fuchsia-500 to-purple-500" },
-  { name: "instagram.com", share: 18, color: "from-emerald-500 to-green-500" },
-  { name: "chatgpt.com", share: 12, color: "from-amber-500 to-orange-500" },
-];
+export default async function Home() {
+  // Fetch paralel dari Go backend
+  const [summary, labGrid, topDomains, notifs] = await Promise.all([
+    fetchSummary("today").catch(() => null),
+    fetchLabGrid(8).catch(() => []),
+    fetchTopDomains({ limit: 5 }).catch(() => []),
+    fetchNotifications(1, 5).catch(() => ({ data: [], meta: { total: 0, page: 1, limit: 5, total_pages: 0 } })),
+  ]);
 
-export default function Home() {
+  // Bangun latestBySeat dari labGrid (data real dari Go backend)
+  // Map to DnsEvent-like shape: only domain + timestamp are used by LabGrid
+  const latestBySeatMap: Record<string, { domain: string; timestamp: string }> = {};
+  for (const ap of labGrid) {
+    for (const client of ap.clients) {
+      latestBySeatMap[client.client_ip] = {
+        domain:    client.last_domain,
+        timestamp: client.last_seen,
+      };
+    }
+  }
+
+  const totalSeats = LAB_SEATS.length; // 108
+  const unreadCount = notifs.data.filter((n) => !n.is_read).length;
+
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.16),_transparent_45%),linear-gradient(135deg,#f8fafc_0%,#eef2ff_100%)] p-6 text-slate-900">
-      <div className="mx-auto flex max-w-7xl flex-col gap-6">
-        <header className="flex flex-col gap-3 rounded-3xl border border-slate-200/70 bg-white/80 p-6 shadow-sm backdrop-blur">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-sm font-medium uppercase tracking-[0.24em] text-sky-600">
-                SATA • Network Intelligence
-              </p>
-              <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">
-                Smart AP Traffic Analyzer
-              </h1>
-            </div>
-            <div className="rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700">
-              Live pipeline active
-            </div>
+    <main className="min-h-screen p-4 sm:p-6">
+      <div className="mx-auto flex max-w-6xl flex-col gap-5">
+
+        {/* ── Header ── */}
+        <header className="flex flex-col gap-3 rounded-2xl border border-line bg-surface chalk-surface p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="font-data text-xs uppercase tracking-[0.24em] text-chalk-faint">
+              SATA · Smart AP Traffic Analyzer
+            </p>
+            <h1 className="mt-1 font-display text-2xl font-semibold text-chalk sm:text-3xl">
+              Pengawasan Lab Komputer
+            </h1>
+            <p className="mt-1 text-sm text-chalk-dim">
+              3 lab · 36 PC per lab · trafik DNS per access point dipantau real-time
+            </p>
           </div>
-          <p className="max-w-2xl text-sm text-slate-600 sm:text-base">
-            AI-powered monitoring for DNS traffic, access-point behavior, and daily reporting from Mikrotik logs.
-          </p>
+          <div className="flex items-center gap-2">
+            <span className="flex items-center gap-1.5 rounded-full border border-safe/30 bg-safe/10 px-3 py-1.5 text-xs font-medium text-safe">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-safe" />
+              Pipeline aktif
+            </span>
+            {/* Notifikasi bell */}
+            <Link
+              href="/notifications"
+              className="relative flex items-center justify-center rounded-full border border-line bg-surface-2 p-2 hover:bg-surface transition-colors"
+              title="Notifikasi"
+            >
+              <Bell width={16} height={16} className="text-chalk-dim" />
+              {unreadCount > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-flag text-[10px] font-bold text-white">
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              )}
+            </Link>
+            {/* Nav links */}
+            <Link href="/blacklist" className="rounded-full border border-line bg-surface-2 px-3 py-1.5 text-xs text-chalk-dim hover:text-chalk transition-colors">
+              Blacklist
+            </Link>
+            <Link href="/dns-info" className="rounded-full border border-line bg-surface-2 px-3 py-1.5 text-xs text-chalk-dim hover:text-chalk transition-colors">
+              DNS Info
+            </Link>
+            <Link href="/client-access" className="rounded-full border border-line bg-surface-2 px-3 py-1.5 text-xs text-chalk-dim hover:text-chalk transition-colors">
+              Client Access
+            </Link>
+            <Link href="/reports" className="rounded-full border border-line bg-surface-2 px-3 py-1.5 text-xs text-chalk-dim hover:text-chalk transition-colors">
+              Laporan
+            </Link>
+          </div>
         </header>
 
-        <section className="grid gap-4 md:grid-cols-3">
-          {stats.map((item) => (
-            <article key={item.label} className="rounded-3xl border border-slate-200/70 bg-white/90 p-5 shadow-sm">
-              <p className="text-sm text-slate-500">{item.label}</p>
-              <div className="mt-3 flex items-end justify-between">
-                <p className="text-3xl font-semibold">{item.value}</p>
-                <span className="text-sm font-medium text-sky-600">{item.detail}</span>
-              </div>
-            </article>
-          ))}
+        {/* ── Stat Cards ── */}
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard
+            icon={<Display width={18} height={18} />}
+            label="PC aktif"
+            value={summary ? `${summary.blacklist_clients > 0 ? totalSeats - summary.blacklist_clients : totalSeats}/${totalSeats}` : "—"}
+            detail={`dari ${ACCESS_POINTS.length} lab`}
+          />
+          <StatCard
+            icon={<Cpus width={18} height={18} />}
+            label="Total Query"
+            value={summary ? String(summary.total_queries) : "—"}
+            detail={`${summary?.unique_domains ?? 0} domain unik`}
+          />
+          <StatCard
+            icon={<CircleInfo width={18} height={18} />}
+            label="Blacklist Hits"
+            value={summary ? String(summary.blacklist_hits) : "—"}
+            detail={`${summary?.blacklist_clients ?? 0} klien terlibat`}
+          />
+          <StatCard
+            icon={<Bell width={18} height={18} />}
+            label="Notifikasi"
+            value={String(notifs.meta.total)}
+            detail={unreadCount > 0 ? `${unreadCount} belum dibaca` : "semua dibaca"}
+          />
         </section>
 
-        <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-          <article className="rounded-3xl border border-slate-200/70 bg-white/90 p-6 shadow-sm">
-            <div className="flex items-center gap-3">
-              <div className="rounded-2xl bg-sky-100 p-2 text-sky-700">
-                <ChartBar width={20} height={20} />
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold">Traffic trend</h2>
-                <p className="text-sm text-slate-500">Devices connected across the day</p>
-              </div>
-            </div>
-            <div className="mt-6 h-48 rounded-2xl bg-slate-950 p-4 text-slate-100">
-              <div className="flex h-full items-end gap-3">
-                {[48, 72, 64, 92, 88, 124, 110].map((height, index) => (
-                  <div key={index} className="flex-1 rounded-t-xl bg-gradient-to-t from-sky-500 to-cyan-300" style={{ height: `${height}%` }} />
-                ))}
-              </div>
-            </div>
-          </article>
+        {/* ── Lab Tabs (denah 3 lab dari data real) ── */}
+        <LabTabs
+          labs={ACCESS_POINTS.map((ap, idx) => ({
+            ap,
+            seats:            seatsForLab(idx + 1),
+            latestBySeatJson: latestBySeatMap,
+          }))}
+        />
 
-          <article className="rounded-3xl border border-slate-200/70 bg-white/90 p-6 shadow-sm">
-            <div className="flex items-center gap-3">
-              <div className="rounded-2xl bg-violet-100 p-2 text-violet-700">
-                <Globe width={20} height={20} />
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold">Top domains</h2>
-                <p className="text-sm text-slate-500">Most accessed by AP</p>
-              </div>
-            </div>
-            <div className="mt-6 space-y-4">
-              {domains.map((domain) => (
-                <div key={domain.name}>
-                  <div className="mb-2 flex items-center justify-between text-sm">
-                    <span>{domain.name}</span>
-                    <span className="font-semibold">{domain.share}%</span>
-                  </div>
-                  <div className="h-2 rounded-full bg-slate-100">
-                    <div className={`h-2 rounded-full bg-gradient-to-r ${domain.color}`} style={{ width: `${domain.share}%` }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </article>
+        {/* ── Alerts + Top Domains ── */}
+        <section className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+          <AlertsFeed labGrid={labGrid} />
+          <TopDomains domains={topDomains} />
         </section>
 
-        <section className="rounded-3xl border border-slate-200/70 bg-slate-950 p-6 text-slate-100 shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="rounded-2xl bg-amber-500/20 p-2 text-amber-400">
-                <Shield width={20} height={20} />
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold">Alerting status</h2>
-                <p className="text-sm text-slate-400">Real-time anomaly detection branch is ready</p>
-              </div>
-            </div>
-            <a href="#" className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-sm font-medium text-slate-100 transition hover:bg-white/20">
-              Open workflow <ArrowUpRight width={16} height={16} />
-            </a>
-          </div>
-        </section>
+        {/* ── Activity Log ── */}
+        <ActivityLog labGrid={labGrid} />
+
+        <p className="text-center text-xs text-chalk-faint">
+          Data dari Go Backend API · 3 lab · 36 PC per lab · refresh untuk memperbarui
+        </p>
       </div>
     </main>
   );

@@ -1,0 +1,536 @@
+{
+  "name": "SATA — DNS Ingestion Pipeline",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "sata-dns",
+        "options": {}
+      },
+      "id": "node-webhook",
+      "name": "Webhook: Terima Batch DNS",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -800,
+        80
+      ],
+      "webhookId": "sata-dns-webhook"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "body",
+        "include": "allOtherFields",
+        "options": {}
+      },
+      "id": "node-split",
+      "name": "Split Batch",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        -608,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "check-token",
+              "leftValue": "={{ $json.headers[\"x-sata-token\"] }}",
+              "rightValue": "={{ $env.SATA_WEBHOOK_TOKEN }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "node-auth",
+      "name": "Validasi Token",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -400,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"error\": \"Unauthorized\" }",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "id": "node-401",
+      "name": "Tolak: 401",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        -400,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ── Klasifikasi domain ──────────────────────────────────────────\nconst FLAG_KEYWORDS  = ['bet','judi','porn','xxx','casino','togel','toto','bokep','phishing','malware'];\nconst WATCH_KEYWORDS = ['youtube','tiktok','instagram','facebook','roblox','mobile-legends','steam','discord','netflix','spotify','twitch','telegram'];\nconst SAFE_KEYWORDS  = ['wikipedia','google','github','stackoverflow','docs.','quipper','ruangguru','belajar','kemdikbud','office','duolingo','classroom','teams','zoom'];\n\nfunction classifyDomain(domain) {\n  const d = (domain || '').toLowerCase();\n  if (FLAG_KEYWORDS.some(k  => d.includes(k))) return 'flag';\n  if (WATCH_KEYWORDS.some(k => d.includes(k))) return 'watch';\n  if (SAFE_KEYWORDS.some(k  => d.includes(k))) return 'safe';\n  return 'safe';\n}\n\n// item tunggal setelah Split Batch — ambil field dari body\nconst ev = $input.first().json.body ?? $input.first().json;\n\nif (!ev.domain || !ev.client_ip) {\n  throw new Error('Event tidak valid: tidak ada domain atau client_ip');\n}\n\nreturn [{\n  json: {\n    timestamp:   ev.timestamp   || new Date().toISOString(),\n    source_type: ev.source_type || 'mikrotik_dns',\n    ap_ip:       ev.ap_ip       || 'unknown',\n    ap_name:     ev.ap_name     || ev.ap_ip || 'unknown',\n    client_ip:   ev.client_ip,\n    domain:      ev.domain,\n    risk_level:  classifyDomain(ev.domain),\n    ingested_at: new Date().toISOString()\n  }\n}];\n"
+      },
+      "id": "node-enrich",
+      "name": "Klasifikasi Domain",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -176,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "incr",
+        "key": "={{ 'rate:' + $json.client_ip }}",
+        "options": {}
+      },
+      "id": "node-rate-incr",
+      "name": "Rate Counter",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        40,
+        80
+      ],
+      "credentials": {
+        "redis": {
+          "id": "sata-redis-cred",
+          "name": "SATA Redis"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "expire",
+        "key": "={{ 'rate:' + $('Klasifikasi Domain').item.json.client_ip }}",
+        "ttl": 60
+      },
+      "id": "node-rate-expire",
+      "name": "Rate TTL",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        240,
+        80
+      ],
+      "credentials": {
+        "redis": {
+          "id": "sata-redis-cred",
+          "name": "SATA Redis"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "id": "anomaly-check",
+              "leftValue": "={{ $json.value }}",
+              "rightValue": 1000,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "node-if-anomaly",
+      "name": "Anomaly?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        440,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SLACK_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ text: \"⚠️ *[SATA CRITICAL]* IP `\" + $('Klasifikasi Domain').item.json.client_ip + \"` melakukan *\" + $json.value + \" request DNS dalam 1 menit* — kemungkinan anomali atau loop!\" }) }}",
+        "options": {}
+      },
+      "id": "node-anomaly-alert",
+      "name": "Alert: Anomaly Rate",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        640,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "key": "={{ 'dedup:' + $('Klasifikasi Domain').item.json.domain + ':' + $('Klasifikasi Domain').item.json.client_ip }}",
+        "options": {}
+      },
+      "id": "node-redis-get",
+      "name": "Cek Duplikat",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        640,
+        80
+      ],
+      "credentials": {
+        "redis": {
+          "id": "sata-redis-cred",
+          "name": "SATA Redis"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "id": "dedup-check",
+              "leftValue": "={{ $json.propertyName }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "node-if-dedup",
+      "name": "Belum Dicatat?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        840,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "set",
+        "key": "={{ 'dedup:' + $('Klasifikasi Domain').item.json.domain + ':' + $('Klasifikasi Domain').item.json.client_ip }}",
+        "value": "1",
+        "expire": true,
+        "ttl": 300
+      },
+      "id": "node-redis-set",
+      "name": "Tandai Cache",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        1040,
+        80
+      ],
+      "credentials": {
+        "redis": {
+          "id": "sata-redis-cred",
+          "name": "SATA Redis"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "collection": "dns_events",
+        "fields": "timestamp,source_type,ap_ip,ap_name,client_ip,domain,risk_level,ingested_at",
+        "options": {}
+      },
+      "id": "node-mongo-insert",
+      "name": "Simpan ke MongoDB",
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1,
+      "position": [
+        1240,
+        80
+      ],
+      "credentials": {
+        "mongoDb": {
+          "id": "sata-mongo-cred",
+          "name": "SATA MongoDB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "id": "flag-check",
+              "leftValue": "={{ $('Klasifikasi Domain').item.json.risk_level }}",
+              "rightValue": "flag",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "node-if-flag",
+      "name": "Domain Berisiko?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1440,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SLACK_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  text: \"🚨 *[SATA Alert]* Domain berisiko terdeteksi!\",\n  attachments: [{\n    color: \"#c0394a\",\n    fields: [\n      { title: \"Access Point\", value: $('Klasifikasi Domain').item.json.ap_name, short: true },\n      { title: \"IP Klien\",     value: $('Klasifikasi Domain').item.json.client_ip, short: true },\n      { title: \"Domain\",      value: $('Klasifikasi Domain').item.json.domain, short: true },\n      { title: \"Risk Level\",  value: $('Klasifikasi Domain').item.json.risk_level.toUpperCase(), short: true },\n      { title: \"Waktu\",       value: new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }) + ' WIB', short: false }\n    ]\n  }]\n}) }}",
+        "options": {}
+      },
+      "id": "node-slack-flag",
+      "name": "Alert: Domain Berisiko",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1640,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"ok\": true }",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "node-200",
+      "name": "Balas: 200 OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1640,
+        240
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook: Terima Batch DNS": {
+      "main": [
+        [
+          {
+            "node": "Split Batch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Batch": {
+      "main": [
+        [
+          {
+            "node": "Validasi Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validasi Token": {
+      "main": [
+        [
+          {
+            "node": "Klasifikasi Domain",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Tolak: 401",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Klasifikasi Domain": {
+      "main": [
+        [
+          {
+            "node": "Rate Counter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rate Counter": {
+      "main": [
+        [
+          {
+            "node": "Rate TTL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rate TTL": {
+      "main": [
+        [
+          {
+            "node": "Anomaly?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anomaly?": {
+      "main": [
+        [
+          {
+            "node": "Alert: Anomaly Rate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Cek Duplikat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Alert: Anomaly Rate": {
+      "main": [
+        [
+          {
+            "node": "Cek Duplikat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cek Duplikat": {
+      "main": [
+        [
+          {
+            "node": "Belum Dicatat?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Belum Dicatat?": {
+      "main": [
+        [
+          {
+            "node": "Tandai Cache",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Tandai Cache": {
+      "main": [
+        [
+          {
+            "node": "Simpan ke MongoDB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simpan ke MongoDB": {
+      "main": [
+        [
+          {
+            "node": "Domain Berisiko?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Domain Berisiko?": {
+      "main": [
+        [
+          {
+            "node": "Alert: Domain Berisiko",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Balas: 200 OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Alert: Domain Berisiko": {
+      "main": [
+        [
+          {
+            "node": "Balas: 200 OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "saveExecutionProgress": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "executionTimeout": 300
+  },
+  "staticData": null,
+  "tags": [
+    "sata",
+    "dns",
+    "ingestion"
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2026-08-18T00:00:00.000Z",
+  "versionId": "sata-ingestion-v2"
+}

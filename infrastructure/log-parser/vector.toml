@@ -69,7 +69,7 @@ condition = '.domain != null && .client_ip != null'
 [sinks.n8n_webhook]
 type = "http"
 inputs = ["filter_valid"]
-uri = "${N8N_WEBHOOK_URL:-http://n8n:5678/webhook/sata-dns}"
+uri = "${VECTOR_N8N_WEBHOOK_URL:-http://n8n:5678/webhook/sata-dns}"
 method = "post"
 encoding.codec = "json"
 compression = "none"

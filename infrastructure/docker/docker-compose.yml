@@ -12,7 +12,7 @@ services:
       - mongo-data:/data/db
 
   n8n:
-    image: n8nio/n8n:1.61.0
+    image: n8nio/n8n:latest
     container_name: sata-n8n
     restart: unless-stopped
     depends_on:
@@ -31,6 +31,16 @@ services:
     volumes:
       - n8n-data:/home/node/.n8n
 
+  redis:
+    image: redis:7.2-alpine
+    container_name: sata-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+
   vector:
     image: timberio/vector:0.38.0-debian
     container_name: sata-vector
@@ -40,14 +50,53 @@ services:
       - "514:514/tcp"
       - "8686:8686"
     environment:
-      - N8N_WEBHOOK_URL=${N8N_WEBHOOK_URL:-http://n8n:5678/webhook/sata-dns}
+      - VECTOR_N8N_WEBHOOK_URL=http://n8n:5678/webhook/sata-dns
       - SATA_WEBHOOK_TOKEN=${SATA_WEBHOOK_TOKEN:-changeme-token}
     volumes:
       - ../log-parser/vector.toml:/etc/vector/vector.toml:ro
       - vector-data:/var/lib/vector
     command: ["--config", "/etc/vector/vector.toml"]
 
+  backend:
+    build:
+      context: ../../services/sata-ai-backend
+      dockerfile: Dockerfile
+    container_name: sata-backend
+    restart: unless-stopped
+    depends_on:
+      - mongo
+      - redis
+    ports:
+      - "8081:8080"
+    environment:
+      APP_ENV: production
+      PORT: 8080
+      MONGODB_URI: mongodb://${MONGO_ROOT_USER:-sata}:${MONGO_ROOT_PASSWORD:-sata123}@mongo:27017/sata?authSource=admin
+      MONGODB_DB: sata
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:-change-me-to-a-random-secret}
+      SATA_WEBHOOK_TOKEN: ${SATA_WEBHOOK_TOKEN:-changeme-token}
+      ALLOWED_ORIGINS: http://localhost:3000
+
+  dashboard:
+    build:
+      context: ../../services/dashboard
+      dockerfile: Dockerfile
+    container_name: sata-dashboard
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      MONGODB_URI: mongodb://${MONGO_ROOT_USER:-sata}:${MONGO_ROOT_PASSWORD:-sata123}@mongo:27017/sata?authSource=admin
+      NEXT_PUBLIC_API_URL: http://backend:8080
+      NEXT_PUBLIC_BASE_URL: http://dashboard:3000
+      NEXT_PUBLIC_WS_URL: ws://backend:8080
+
 volumes:
   mongo-data:
   n8n-data:
   vector-data:
+  redis-data:
