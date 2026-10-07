@@ -26,12 +26,12 @@ export function TopDomains({ domains }: { domains: TopDomain[] }) {
       <div className="flex items-center gap-2.5">
         <Globe width={18} height={18} className="text-chalk-faint" />
         <div>
-          <h2 className="font-display text-lg font-semibold text-chalk">Domain Terbanyak</h2>
-          <p className="text-sm text-chalk-dim">Sesi hari ini</p>
+          <h2 className="font-display text-lg font-semibold text-chalk">Top domains</h2>
+          <p className="text-sm text-chalk-dim">Today&apos;s session</p>
         </div>
       </div>
       {domains.length === 0 ? (
-        <p className="mt-5 text-sm text-chalk-dim">Belum ada data domain.</p>
+        <p className="mt-5 text-sm text-chalk-dim">No domain data yet.</p>
       ) : (
         <div className="mt-5 space-y-4">
           {domains.map((d) => {

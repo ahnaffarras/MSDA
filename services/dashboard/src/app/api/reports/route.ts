@@ -1,57 +1,77 @@
+import { NextResponse } from "next/server";
+import { getDb } from "@/lib/db";
+import {
+  formatDateLabel,
+  formatTimestamp,
+  buildReportText,
+  buildRawData,
+  type DnsAiReportDoc,
+  type DnsDailyStatsDoc,
+} from "@/lib/report-format";
+
 /**
  * GET /api/reports
- *
- * Mengembalikan laporan AI harian yang telah diarsipkan oleh
- * workflow n8n (sata-daily-report) ke koleksi `ai_reports`.
- *
- * Query params:
- *   limit — jumlah laporan yang dikembalikan, default 7 (1 minggu), max 30
- *
- * Response:
- * {
- *   date_label:  string;
- *   report_text: string;
- *   raw_rows:    number;
- *   ap_count:    number;
- *   created_at?: string;
- * }[]
+ * Membaca laporan harian dari koleksi `dns_ai_reports` (ditulis n8n workflow v8)
+ * dan digabungkan dengan `dns_daily_stats` berdasarkan field `date` (format YYYY-MM-DD, zona WIB).
+ * Mengembalikan array laporan terurut tanggal terbaru (limit 30).
  */
-
-import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "@/lib/db";
-
-export const dynamic = "force-dynamic";
-
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
-    const { searchParams } = req.nextUrl;
-    const limit = Math.min(Number(searchParams.get("limit") ?? 7), 30);
-
     const db = await getDb();
 
-    const docs = await db
-      .collection("ai_reports")
+    // 1. Ambil laporan harian AI terurut berdasarkan date desc, limit 30
+    const aiReports = await db
+      .collection<DnsAiReportDoc>("dns_ai_reports")
       .find({})
-      .sort({ _id: -1 }) // terbaru dulu (ObjectId mengandung timestamp)
-      .limit(limit)
-      .project({
-        _id: 0,
-        date_label:  1,
-        report_text: 1,
-        raw_rows:    1,
-        ap_count:    1,
-        created_at:  1,
-      })
+      .sort({ date: -1 })
+      .limit(30)
       .toArray();
 
-    return NextResponse.json(docs, {
-      headers: { "Cache-Control": "no-store" },
+    // 2. Kumpulkan seluruh tanggal untuk query dns_daily_stats dalam SATU query ($in)
+    const dates = aiReports.map((r) => r.date).filter(Boolean);
+    const dailyStatsList =
+      dates.length > 0
+        ? await db
+            .collection<DnsDailyStatsDoc>("dns_daily_stats")
+            .find({ date: { $in: dates } })
+            .toArray()
+        : [];
+
+    // 3. Buat lookup Map berdasarkan date
+    const dailyStatsMap = new Map<string, DnsDailyStatsDoc>();
+    for (const stat of dailyStatsList) {
+      if (stat.date) {
+        dailyStatsMap.set(stat.date, stat);
+      }
+    }
+
+    // 4. Petakan dokumen ke bentuk response standar dashboard
+    const responseData = aiReports.map((report) => {
+      const stats = report.date ? dailyStatsMap.get(report.date) : undefined;
+
+      const rawRows =
+        typeof stats?.total_requests === "number"
+          ? stats.total_requests
+          : (report.summary?.total_requests?.today ?? 0);
+
+      const apCount = Array.isArray(stats?.per_ap)
+        ? stats.per_ap.length
+        : (Array.isArray(report.trends?.ap_totals) ? report.trends.ap_totals.length : 0);
+
+      return {
+        _id: String(report._id),
+        timestamp: formatTimestamp(report.generated_at, report.date),
+        date_label: formatDateLabel(report.date, report.partial),
+        report_text: buildReportText(report, stats),
+        raw_rows: rawRows,
+        ap_count: apCount,
+        raw_data: buildRawData(stats),
+      };
     });
-  } catch (err) {
-    console.error("[/api/reports]", err);
-    return NextResponse.json(
-      { error: "Gagal mengambil laporan AI dari database." },
-      { status: 500 }
-    );
+
+    return NextResponse.json(responseData);
+  } catch (error) {
+    console.error("[reports GET]", error);
+    return NextResponse.json({ error: "Failed to load reports" }, { status: 500 });
   }
 }

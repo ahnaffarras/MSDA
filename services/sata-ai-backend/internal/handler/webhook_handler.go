@@ -1,8 +1,10 @@
 package handler
 
 import (
+	"context"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sata-ai/backend/internal/model"
@@ -30,7 +32,10 @@ func (h *WebhookHandler) Receive(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"received": true})
 
 	go func() {
-		ctx := c.Request.Context()
+		// FIX: Use background context instead of request context
+		ctx := context.Background()
+		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
 
 		// Save to notification history
 		notif := &model.Notification{
@@ -41,6 +46,8 @@ func (h *WebhookHandler) Receive(c *gin.Context) {
 		}
 		if err := h.repo.Create(ctx, notif); err != nil {
 			log.Printf("[Webhook] failed to save notification: %v", err)
+		} else {
+			log.Printf("[Webhook] notification saved successfully, id=%s", notif.ID.Hex())
 		}
 
 		// Broadcast to all connected dashboard clients via WebSocket

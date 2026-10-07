@@ -170,3 +170,84 @@ export interface LabSeat {
   client_ip:     string;
   student_label: string;
 }
+
+// ── Device Types ────────────────────────────────────────────────────────────
+export type DeviceType = 'PC' | 'AP' | 'Client' | 'Server' | 'Printer' | 'Other';
+
+// ── Network Types ───────────────────────────────────────────────────────────
+// Network Types are now stored in database, not hard-coded
+export interface NetworkTypeItem {
+  id: string;
+  name: string;
+  created_at: string;
+}
+
+// ── lab_configs (flexible lab configuration) ────────────────────────────────
+export interface LabConfig {
+  id:           string;
+  name:         string;           // e.g., "Lab Komputer 1", "Lab Multimedia", "Lapkom A"
+  ap_ip:        string;           // Access Point IP
+  network_type: string;      // Type of network
+  description?: string;           // Optional description
+  order:        number;           // Display order in tabs
+  is_active:    boolean;          // Show/hide this lab
+  created_at:   string;
+  updated_at:   string;
+}
+
+export interface IPMapping {
+  id:          string;
+  lab_id:      string;           // Reference to LabConfig.id
+  client_ip:   string;           // IP address from logs
+  device_type: DeviceType;       // Type of device (PC, AP, Client, etc)
+  seat:        number;           // Seat/position number
+  label:       string;           // e.g., "PC-01", "AP-Main", "Client-A"
+  description?: string;          // Optional description
+  created_at:  string;
+  updated_at:  string;
+}
+
+// ── Available IPs from logs ─────────────────────────────────────────────────
+export interface AvailableIP {
+  client_ip:    string;
+  ap_ip:        string;
+  ap_name:      string;
+  last_seen:    string;
+  query_count:  number;
+  is_mapped:    boolean;        // Already mapped to a lab?
+}
+
+// ── Network Summary ─────────────────────────────────────────────────────────
+export interface NetworkSummary {
+  lab_id:      string;
+  lab_name:    string;
+  total_devices: number;
+  by_type:     { device_type: DeviceType; count: number }[];
+  ap_count:    number;
+  client_count: number;
+}
+
+// ── Groups (Main menu items in sidebar) ─────────────────────────────────────
+export interface Group {
+  id:           string;
+  name:         string;           // e.g., "Kelas A", "Lab Multimedia", "Ruang Server"
+  description?: string;           // Optional description
+  order:        number;           // Display order in sidebar
+  is_active:    boolean;          // Show/hide this group
+  created_at:   string;
+  updated_at:   string;
+}
+
+// ── Nodes (Submenu items under each Group) ──────────────────────────────────
+export interface Node {
+  id:           string;
+  group_id:     string;           // Reference to Group.id
+  name:         string;           // e.g., "AP r.23", "AP r.24", "Server Main"
+  ap_ip:        string;           // Access Point IP or device IP
+  device_type:  string;           // e.g., "AP", "Server", "Router"
+  description?: string;           // Optional description
+  order:        number;           // Display order within group
+  is_active:    boolean;          // Show/hide this node
+  created_at:   string;
+  updated_at:   string;
+}

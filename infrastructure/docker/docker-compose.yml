@@ -1,6 +1,6 @@
 services:
   mongo:
-    image: mongo:7.0
+    image: mongo:4.4
     container_name: sata-mongo
     restart: unless-stopped
     environment:
@@ -28,6 +28,11 @@ services:
       N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-changeme}
       WEBHOOK_URL: ${N8N_WEBHOOK_URL:-http://localhost:5678/}
       GENERIC_TIMEZONE: Asia/Jakarta
+      TZ: Asia/Jakarta
+      EXECUTIONS_DATA_PRUNE: "true"
+      EXECUTIONS_DATA_MAX_AGE: 72
+      EXECUTIONS_DATA_PRUNE_MAX_COUNT: 10000
+      N8N_SECURE_COOKIE: "false"
     volumes:
       - n8n-data:/home/node/.n8n
 
@@ -50,7 +55,7 @@ services:
       - "514:514/tcp"
       - "8686:8686"
     environment:
-      - VECTOR_N8N_WEBHOOK_URL=http://n8n:5678/webhook/sata-dns
+      - VECTOR_N8N_WEBHOOK_URL=http://n8n:5678/webhook/dns-scan-webhook
       - SATA_WEBHOOK_TOKEN=${SATA_WEBHOOK_TOKEN:-changeme-token}
     volumes:
       - ../log-parser/vector.toml:/etc/vector/vector.toml:ro
@@ -82,6 +87,8 @@ services:
     build:
       context: ../../services/dashboard
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://backend:8080
     container_name: sata-dashboard
     restart: unless-stopped
     depends_on:
@@ -94,6 +101,11 @@ services:
       NEXT_PUBLIC_API_URL: http://backend:8080
       NEXT_PUBLIC_BASE_URL: http://dashboard:3000
       NEXT_PUBLIC_WS_URL: ws://backend:8080
+      SATA_BOOTSTRAP_ADMIN_USER: ${SATA_BOOTSTRAP_ADMIN_USER:-admin}
+      SATA_BOOTSTRAP_ADMIN_PASSWORD: ${SATA_BOOTSTRAP_ADMIN_PASSWORD:-}
+      SATA_SESSION_HOURS: ${SATA_SESSION_HOURS:-12}
+      SATA_COOKIE_SECURE: ${SATA_COOKIE_SECURE:-}
+      SATA_ALLOWED_ORIGINS: ${SATA_ALLOWED_ORIGINS:-}
 
 volumes:
   mongo-data:

@@ -78,8 +78,8 @@ type DNSInfo struct {
 	IPScan       []IPScan           `bson:"ip_scan"          json:"ip_scan"`
 	PTRHostname  string             `bson:"ptr_hostname"     json:"ptr_hostname"`
 	HostISP      HostISP            `bson:"host_isp"         json:"host_isp"`
-	LastVerified time.Time          `bson:"last_verified"    json:"last_verified"`
-	Timestamp    time.Time          `bson:"timestamp"        json:"timestamp"`
+	LastVerified FlexTime           `bson:"last_verified"    json:"last_verified"`
+	Timestamp    FlexTime           `bson:"timestamp"        json:"timestamp"`
 }
 
 // ── DNS Blacklist ─────────────────────────────────────────────────────────────
@@ -89,17 +89,17 @@ type DNSBlacklist struct {
 	BlockedLevel string             `bson:"blocked_level"    json:"blocked_level"` // "domain" | "group"
 	Domain       string             `bson:"domain,omitempty" json:"domain,omitempty"`
 	Group        string             `bson:"group,omitempty"  json:"group,omitempty"`
-	Type         string             `bson:"type"             json:"type"` // gambling|adult|malware|phishing|crypto_miner|custom
+	Type         string             `bson:"type"             json:"type"` // gambling|adult|malware|phishing|crypto_miner|social_media|streaming|gaming|testing|custom
 	IsActive     bool               `bson:"is_active"        json:"is_active"`
-	CreatedAt    time.Time          `bson:"created_at"       json:"created_at"`
-	UpdatedAt    time.Time          `bson:"updated_at"       json:"updated_at"`
+	CreatedAt    FlexTime           `bson:"created_at"       json:"created_at"`
+	UpdatedAt    FlexTime           `bson:"updated_at"       json:"updated_at"`
 }
 
 type BlacklistRequest struct {
 	BlockedLevel string `json:"blocked_level" binding:"required,oneof=domain group"`
 	Domain       string `json:"domain"`
 	Group        string `json:"group"`
-	Type         string `json:"type" binding:"required,oneof=gambling adult malware phishing crypto_miner custom"`
+	Type         string `json:"type" binding:"required,oneof=gambling adult malware phishing crypto_miner social_media streaming gaming testing custom"`
 	IsActive     *bool  `json:"is_active"`
 }
 
@@ -112,7 +112,7 @@ type APInfo struct {
 
 type ClientAccessDNS struct {
 	ID          primitive.ObjectID `bson:"_id,omitempty"   json:"id"`
-	Timestamp   time.Time          `bson:"timestamp"       json:"timestamp"`
+	Timestamp   FlexTime           `bson:"timestamp"       json:"timestamp"`
 	Domain      string             `bson:"domain"          json:"domain"`
 	Group       string             `bson:"group"           json:"group"`
 	Type        string             `bson:"type"            json:"type"`
@@ -168,11 +168,12 @@ type DashboardSummary struct {
 // ── Lab Grid ──────────────────────────────────────────────────────────────────
 
 type LabClient struct {
-	ClientIP    string    `json:"client_ip"`
-	LastDomain  string    `json:"last_domain"`
-	LastAction  string    `json:"last_action"`
-	LastSeen    time.Time `json:"last_seen"`
-	RiskLevel   string    `json:"risk_level"`
+	ClientIP   string   `bson:"client_ip"   json:"client_ip"`
+	LastDomain string   `bson:"last_domain" json:"last_domain"`
+	LastAction string   `bson:"last_action" json:"last_action"`
+	LastSeen   FlexTime `bson:"last_seen"   json:"last_seen"`
+	Type       string   `bson:"type"        json:"type"`
+	RiskLevel  string   `bson:"-"           json:"risk_level"` // safe | watch | flag, dihitung di repo
 }
 
 type LabGridAP struct {

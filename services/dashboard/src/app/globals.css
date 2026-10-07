@@ -1,26 +1,141 @@
 @import "tailwindcss";
 
-:root {
-  /* Soft light surfaces — calm and easy on the eyes */
-  --background: #f0f4f8;
+/*
+ * SATA — konsol analisis lalu lintas jaringan.
+ * Tema modern terang/gelap: BIRU sebagai warna utama (tombol, tautan, status
+ * aktif, seri data "query"), HIJAU sebagai warna pendamping (indikator "live",
+ * beban per access point, status wajar, penanda aktif di sidebar).
+ * Merah / kuning HANYA untuk tingkat risiko.
+ * Sidebar mengikuti tema (putih di terang, navy pekat di gelap).
+ * Semua halaman membaca token di bawah — jangan hardcode hex di komponen.
+ */
+
+:root,
+.light {
+  color-scheme: light;
+
+  --background: #f3f6fb;
   --surface: #ffffff;
-  --surface-2: #e8eef4;
-  --line: #c8d8e8;
+  --surface-2: #f7f9fd;
+  --surface-3: #e8eef7;
+  --line: #e1e8f2;
+  --line-strong: #b4c1d6;
 
-  /* Text tones */
-  --chalk: #2d3f50;
-  --chalk-dim: #5a7080;
-  --chalk-faint: #8fa8bc;
+  --chalk: #0e1a33;
+  --chalk-dim: #3b4a66;
+  --chalk-faint: #58677f;
 
-  /* Status accents (mapped to domain risk, not decoration) */
-  --accent-safe: #3a9e6e;
-  --accent-safe-bg: rgba(58, 158, 110, 0.10);
-  --accent-watch: #c8860a;
-  --accent-watch-bg: rgba(200, 134, 10, 0.10);
-  --accent-flag: #c0394a;
-  --accent-flag-bg: rgba(192, 57, 74, 0.10);
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --primary-light: #e4edff;
+  --on-primary: #ffffff;
+
+  --secondary: #58677f;
+  --secondary-hover: #3b4a66;
+  --secondary-light: #e8eef7;
+
+  /* Hijau pendamping: indikator live dan beban AP */
+  --signal: #16a34a;
+  --flow: #22b573;
+
+  --accent-safe: #15803d;
+  --accent-safe-bg: #e5f7ec;
+  --accent-safe-border: #a6dfbc;
+
+  --accent-watch: #a15c07;
+  --accent-watch-bg: #fef3d6;
+  --accent-watch-border: #f1d58e;
+
+  --accent-flag: #c4202f;
+  --accent-flag-bg: #fde8ea;
+  --accent-flag-border: #f4b2b9;
 
   --foreground: var(--chalk);
+
+  --grid-dot: #c7d4e8;
+
+  --shadow-sm: 0 1px 2px rgb(15 30 70 / 0.05);
+  --shadow: 0 1px 3px rgb(15 30 70 / 0.08);
+  --shadow-md: 0 6px 16px rgb(15 30 70 / 0.09);
+  --shadow-lg: 0 14px 32px rgb(15 30 70 / 0.16);
+
+  /* Sidebar — terang */
+  --rail-bg: #ffffff;
+  --rail-line: #e3e9f3;
+  --rail-text: #33425f;
+  --rail-strong: #0e1a33;
+  --rail-dim: #5b6a85;
+  --rail-faint: #66758f;
+  --rail-hover: #f0f4fb;
+  --rail-chip: #e9eff9;
+  --rail-active-bg: #e6eeff;
+  --rail-active-text: #1d4ed8;
+  --rail-accent: #16a34a;
+  --rail-seg-active: #ffffff;
+  --rail-scrim: rgb(14 26 51 / 0.45);
+}
+
+.dark {
+  color-scheme: dark;
+
+  --background: #0a1020;
+  --surface: #111a2f;
+  --surface-2: #16213a;
+  --surface-3: #1e2b48;
+  --line: #22314f;
+  --line-strong: #3b4e75;
+
+  --chalk: #e8eefb;
+  --chalk-dim: #b5c1da;
+  --chalk-faint: #8c9ab8;
+
+  --primary: #5ea0ff;
+  --primary-hover: #93c0ff;
+  --primary-light: #14294f;
+  --on-primary: #06142e;
+
+  --secondary: #8c9ab8;
+  --secondary-hover: #b5c1da;
+  --secondary-light: #1e2b48;
+
+  --signal: #34d399;
+  --flow: #34d399;
+
+  --accent-safe: #4ade80;
+  --accent-safe-bg: #0f2a1f;
+  --accent-safe-border: #1f5a3c;
+
+  --accent-watch: #fbbf24;
+  --accent-watch-bg: #2b2108;
+  --accent-watch-border: #5a4412;
+
+  --accent-flag: #fb7185;
+  --accent-flag-bg: #321219;
+  --accent-flag-border: #6a2433;
+
+  --foreground: var(--chalk);
+
+  --grid-dot: #1a2845;
+
+  --shadow-sm: none;
+  --shadow: none;
+  --shadow-md: 0 6px 16px rgb(0 0 0 / 0.4);
+  --shadow-lg: 0 14px 34px rgb(0 0 0 / 0.55);
+
+  /* Sidebar — gelap */
+  --rail-bg: #0c1426;
+  --rail-line: #1c2a45;
+  --rail-text: #c5d0e6;
+  --rail-strong: #ffffff;
+  --rail-dim: #8f9cb9;
+  --rail-faint: #7987a5;
+  --rail-hover: #131f38;
+  --rail-chip: #1a2845;
+  --rail-active-bg: #15294f;
+  --rail-active-text: #9cc4ff;
+  --rail-accent: #34d399;
+  --rail-seg-active: #243e6e;
+  --rail-scrim: rgb(2 6 16 / 0.7);
 }
 
 @theme inline {
@@ -28,42 +143,342 @@
   --color-foreground: var(--foreground);
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
   --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
   --color-chalk: var(--chalk);
   --color-chalk-dim: var(--chalk-dim);
   --color-chalk-faint: var(--chalk-faint);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-light: var(--primary-light);
+  --color-on-primary: var(--on-primary);
+  --color-secondary: var(--secondary);
+  --color-secondary-hover: var(--secondary-hover);
+  --color-secondary-light: var(--secondary-light);
+  --color-signal: var(--signal);
+  --color-flow: var(--flow);
   --color-safe: var(--accent-safe);
+  --color-safe-bg: var(--accent-safe-bg);
+  --color-safe-border: var(--accent-safe-border);
   --color-watch: var(--accent-watch);
+  --color-watch-bg: var(--accent-watch-bg);
+  --color-watch-border: var(--accent-watch-border);
   --color-flag: var(--accent-flag);
-  --font-sans: var(--font-body);
-  --font-display: var(--font-display);
-  --font-data: var(--font-data);
+  --color-flag-bg: var(--accent-flag-bg);
+  --color-flag-border: var(--accent-flag-border);
+
+  --font-sans: var(--f-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--f-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--f-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-data: var(--f-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Skala sudut bertingkat: kontrol kecil rapat, panel dan kartu sedikit lebih lapang */
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+  --radius-2xl: 12px;
+}
+
+/*
+ * Alias lama. Beberapa halaman memakai var(--flag), var(--watch), var(--safe)
+ * yang sebelumnya tidak pernah didefinisikan (warna jadi hilang).
+ */
+:root {
+  --flag: var(--accent-flag);
+  --flag-bg: var(--accent-flag-bg);
+  --flag-border: var(--accent-flag-border);
+  --watch: var(--accent-watch);
+  --watch-bg: var(--accent-watch-bg);
+  --watch-border: var(--accent-watch-border);
+  --safe: var(--accent-safe);
+  --safe-bg: var(--accent-safe-bg);
+  --safe-border: var(--accent-safe-border);
 }
 
 * {
   box-sizing: border-box;
 }
 
+html {
+  -webkit-text-size-adjust: 100%;
+  background: var(--background);
+}
+
 body {
   margin: 0;
   min-height: 100vh;
-  background:
-    radial-gradient(circle at 12% 0%, rgba(58, 158, 110, 0.07), transparent 40%),
-    radial-gradient(circle at 88% 100%, rgba(99, 140, 200, 0.06), transparent 40%),
-    var(--background);
+  min-height: 100dvh;
+  background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-body), Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.5;
+  overflow-x: hidden;
 }
 
-/* Subtle dot texture on panels */
+/* Perpindahan tema halus, hanya warna — bukan semua properti */
+body,
+aside,
+header,
+main {
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button,
+a {
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+}
+
+button:not(:disabled),
+[role="button"] {
+  cursor: pointer;
+}
+
+/*
+ * Wadah isi halaman: penuh di layar kecil, dipusatkan dengan lebar maksimum di
+ * layar lebar. Header berlatar penuh boleh melebar; isinya memakai kelas ini
+ * supaya kiri-kanan selalu seimbang (tidak menempel ke kiri di monitor lebar).
+ */
+.page-x {
+  width: 100%;
+  max-width: 96rem;
+  margin-inline: auto;
+  padding-inline: clamp(1rem, 3vw, 2rem);
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Tabel & teks panjang tidak boleh melebarkan halaman di layar kecil */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+*:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--primary);
+  color: var(--on-primary);
+}
+
+/*
+ * Kelas "chalk-surface" dipakai kartu lama; dulu tidak terdefinisi.
+ * Sekarang jadi bayangan tipis supaya kartu terangkat dari latar.
+ */
 .chalk-surface {
-  background-image: radial-gradient(rgba(45, 63, 80, 0.04) 1px, transparent 1px);
-  background-size: 3px 3px;
+  box-shadow: var(--shadow-sm);
+}
+
+/*
+ * Header halaman — satu gaya untuk semua halaman. Memakai warna permukaan kartu
+ * (bukan warna latar) supaya band header selalu senada dengan panel di bawahnya,
+ * baik di mode terang maupun gelap. Garis gradien biru → hijau di sisi judul
+ * adalah satu-satunya aksen dekoratif.
+ */
+.page-head {
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+.page-title {
+  position: relative;
+  padding-left: 0.9rem;
+}
+.page-title::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.2rem;
+  bottom: 0.2rem;
+  width: 3px;
+  border-radius: 3px;
+  background: linear-gradient(180deg, var(--primary), var(--signal));
+}
+
+/* Kontrol segmen (rentang waktu, filter) */
+.seg {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 0.625rem;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+}
+.seg-btn {
+  padding: 0.35rem 0.8rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--chalk-dim);
+}
+.seg-btn:hover {
+  color: var(--chalk);
+  background: var(--surface-3);
+}
+.seg-btn[aria-pressed="true"] {
+  background: var(--primary);
+  color: var(--on-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Tombol sekunder & utama yang dipakai di header */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.9rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--chalk);
+}
+.btn:hover:not(:disabled) {
+  background: var(--surface-3);
+}
+.btn:disabled {
+  opacity: 0.5;
+}
+.btn-primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--on-primary);
+  font-weight: 600;
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--primary-hover);
+}
+
+/* Sidebar */
+.rail {
+  background: var(--rail-bg);
+  border-color: var(--rail-line);
+  color: var(--rail-text);
+}
+.rail-link {
+  position: relative;
+  color: var(--rail-text);
+}
+.rail-link:hover {
+  background: var(--rail-hover);
+  color: var(--rail-strong);
+}
+.rail-link[data-active="true"] {
+  background: var(--rail-active-bg);
+  color: var(--rail-active-text);
+  font-weight: 600;
+}
+/* Penanda aktif hijau, menempel di tepi kiri sidebar */
+.rail-link[data-active="true"]::before {
+  content: "";
+  position: absolute;
+  left: -0.75rem;
+  top: 22%;
+  bottom: 22%;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--rail-accent);
+}
+.rail-sub {
+  position: relative;
+  color: var(--rail-dim);
+}
+.rail-sub:hover {
+  background: var(--rail-hover);
+  color: var(--rail-strong);
+}
+.rail-sub[data-active="true"] {
+  background: var(--rail-active-bg);
+  color: var(--rail-active-text);
+}
+.rail-sub[data-active="true"]::before {
+  content: "";
+  position: absolute;
+  left: -0.95rem;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  margin-top: -3.5px;
+  border-radius: 9999px;
+  background: var(--rail-accent);
+  box-shadow: 0 0 0 3px var(--rail-bg);
+}
+.rail-label {
+  color: var(--rail-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.6875rem;
+}
+.rail-count {
+  background: var(--rail-chip);
+  color: var(--rail-dim);
+}
+.rail-link[data-active="true"] .rail-count {
+  background: var(--rail-bg);
+  color: var(--rail-active-text);
+}
+.rail *:focus-visible {
+  outline-color: var(--primary);
+}
+
+/* Logo: gradien biru → hijau */
+.brand-mark {
+  background: linear-gradient(135deg, #2563eb 0%, #1d8fd8 55%, #10b981 100%);
+  box-shadow: 0 2px 8px rgb(37 99 235 / 0.35);
+}
+
+/* Sakelar tema (terang / gelap) */
+.rail-seg {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 0.625rem;
+  background: var(--rail-chip);
+}
+.rail-seg-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--rail-dim);
+}
+.rail-seg-btn:hover {
+  color: var(--rail-strong);
+}
+.rail-seg-btn[aria-pressed="true"] {
+  background: var(--rail-seg-active);
+  color: var(--rail-active-text);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.12);
 }
 
 @media (prefers-reduced-motion: reduce) {
   * {
     animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
 }

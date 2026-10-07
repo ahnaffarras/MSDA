@@ -46,9 +46,9 @@ export function classifyDomain(domain: string): RiskLevel {
 }
 
 export const RISK_LABEL: Record<RiskLevel, string> = {
-  safe: "Wajar",
-  watch: "Perlu Perhatian",
-  flag: "Berisiko",
+  safe: "Normal",
+  watch: "Needs attention",
+  flag: "Risky",
 };
 
 export const RISK_COLOR: Record<RiskLevel, { fg: string; bg: string }> = {
@@ -60,6 +60,10 @@ export const RISK_COLOR: Record<RiskLevel, { fg: string; bg: string }> = {
 /** Map domain type/category string to a UI risk level. */
 const FLAG_TYPES  = new Set(["gambling", "adult", "malware", "phishing", "crypto_miner"]);
 const WATCH_TYPES = new Set(["social_media", "streaming", "gaming"]);
+
+/** Daftar mentah untuk dipakai di query MongoDB ($in). */
+export const FLAG_TYPE_LIST = [...FLAG_TYPES];
+export const WATCH_TYPE_LIST = [...WATCH_TYPES];
 
 export function riskLevelFromType(type: string): RiskLevel {
   if (FLAG_TYPES.has(type))  return "flag";

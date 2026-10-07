@@ -1,0 +1,664 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import type { LabConfig, AvailableIP, IPMapping, DeviceType, NetworkType } from '@/lib/types'
+
+export default function SettingsPage() {
+  const [labs, setLabs] = useState<LabConfig[]>([])
+  const [availableIPs, setAvailableIPs] = useState<AvailableIP[]>([])
+  const [mappings, setMappings] = useState<IPMapping[]>([])
+  const [loading, setLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState<'labs' | 'mappings' | 'network'>('labs')
+  
+  // Modal states
+  const [showAddLabModal, setShowAddLabModal] = useState(false)
+  const [showMapIPModal, setShowMapIPModal] = useState(false)
+  const [editingLab, setEditingLab] = useState<LabConfig | null>(null)
+  
+  // Form states
+  const [labForm, setLabForm] = useState({ 
+    name: '', 
+    ap_ip: '', 
+    network_type: 'Lab' as NetworkType,
+    description: ''
+  })
+  const [selectedLabId, setSelectedLabId] = useState('')
+  const [ipMappingForm, setIpMappingForm] = useState({
+    device_type: 'PC' as DeviceType,
+    label: '',
+    description: ''
+  })
+
+  useEffect(() => {
+    fetchData()
+  }, [])
+
+  const fetchData = async () => {
+    try {
+      const [labsRes, ipsRes, mappingsRes] = await Promise.all([
+        fetch('/api/lab-config'),
+        fetch('/api/available-ips?hours=24'),
+        fetch('/api/ip-mappings')
+      ])
+      
+      const labsData = await labsRes.json()
+      const ipsData = await ipsRes.json()
+      const mappingsData = await mappingsRes.json()
+      
+      setLabs(labsData)
+      setAvailableIPs(ipsData)
+      setMappings(mappingsData)
+    } catch (error) {
+      console.error('Failed to fetch:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleAddLab = async () => {
+    if (!labForm.name || !labForm.ap_ip) return
+    
+    try {
+      const method = editingLab ? 'PUT' : 'POST'
+      const url = editingLab ? `/api/lab-config/${editingLab.id}` : '/api/lab-config'
+      
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(labForm)
+      })
+      
+      if (res.ok) {
+        await fetchData()
+        setShowAddLabModal(false)
+        setEditingLab(null)
+        setLabForm({ name: '', ap_ip: '', network_type: 'Lab', description: '' })
+      }
+    } catch (error) {
+      console.error('Failed to save lab:', error)
+    }
+  }
+
+  const handleDeleteLab = async (id: string) => {
+    if (!confirm('Hapus lab ini? Semua mapping IP akan ikut terhapus.')) return
+    
+    try {
+      await fetch(`/api/lab-config/${id}`, { method: 'DELETE' })
+      await fetchData()
+    } catch (error) {
+      console.error('Failed to delete lab:', error)
+    }
+  }
+
+  const handleMapIP = async (ip: AvailableIP) => {
+    if (!selectedLabId) {
+      alert('Pilih lab terlebih dahulu')
+      return
+    }
+    
+    const labMappings = mappings.filter(m => m.lab_id === selectedLabId)
+    const seat = labMappings.length + 1
+    const prefix = ipMappingForm.device_type === 'AP' ? 'AP' : 
+                   ipMappingForm.device_type === 'Client' ? 'Client' : 
+                   ipMappingForm.device_type === 'Server' ? 'Server' : 
+                   ipMappingForm.device_type === 'Printer' ? 'Printer' : 'PC'
+    const label = ipMappingForm.label || `${prefix}-${String(seat).padStart(2, '0')}`
+    
+    try {
+      await fetch('/api/ip-mappings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lab_id: selectedLabId,
+          client_ip: ip.client_ip,
+          device_type: ipMappingForm.device_type,
+          seat,
+          label,
+          description: ipMappingForm.description
+        })
+      })
+      
+      await fetchData()
+      setIpMappingForm({ device_type: 'PC', label: '', description: '' })
+    } catch (error) {
+      console.error('Failed to map IP:', error)
+    }
+  }
+
+  const handleUnmapIP = async (mapping: IPMapping) => {
+    try {
+      await fetch('/api/ip-mappings', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [mapping.id] })
+      })
+      
+      await fetchData()
+    } catch (error) {
+      console.error('Failed to unmap IP:', error)
+    }
+  }
+
+  const getDeviceIcon = (deviceType: DeviceType) => {
+    switch (deviceType) {
+      case 'AP':
+        return (
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
+          </svg>
+        )
+      case 'Server':
+        return (
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
+          </svg>
+        )
+      case 'Printer':
+        return (
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+          </svg>
+        )
+      case 'Client':
+        return (
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+          </svg>
+        )
+      default:
+        return (
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+          </svg>
+        )
+    }
+  }
+
+  const getNetworkSummary = (labId: string) => {
+    const labMappings = mappings.filter(m => m.lab_id === labId)
+    const byType = labMappings.reduce((acc, m) => {
+      acc[m.device_type] = (acc[m.device_type] || 0) + 1
+      return acc
+    }, {} as Record<DeviceType, number>)
+    
+    return {
+      total: labMappings.length,
+      byType
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#0a0e1a] flex items-center justify-center">
+        <div className="w-12 h-12 border-4 border-[#1f2937] border-t-blue-500 rounded-full animate-spin"></div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen bg-[#0a0e1a]">
+      {/* Header */}
+      <div className="border-b border-[#1f2937] bg-[#0f1419]">
+        <div className="px-4 md:px-8 py-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <h1 className="text-xl md:text-2xl font-semibold text-white tracking-tight">
+                Network Management
+              </h1>
+              <p className="text-sm text-[#6b7280] mt-1">
+                Kelola lab dan network dengan fleksibel - PC, AP, Client, Server, dll
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                setEditingLab(null)
+                setLabForm({ name: '', ap_ip: '', network_type: 'Lab', description: '' })
+                setShowAddLabModal(true)
+              }}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm font-medium w-full sm:w-auto"
+            >
+              + Tambah Lab
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="px-4 md:px-8 py-6 md:py-8">
+        {/* Tabs */}
+        <div className="flex gap-2 mb-6 overflow-x-auto">
+          <button
+            onClick={() => setActiveTab('labs')}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+              activeTab === 'labs'
+                ? 'bg-blue-500 text-white'
+                : 'bg-[#111827] text-[#9ca3af] hover:text-white'
+            }`}
+          >
+            Kelola Lab
+          </button>
+          <button
+            onClick={() => setActiveTab('network')}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+              activeTab === 'network'
+                ? 'bg-blue-500 text-white'
+                : 'bg-[#111827] text-[#9ca3af] hover:text-white'
+            }`}
+          >
+            Network Summary
+          </button>
+          <button
+            onClick={() => setActiveTab('mappings')}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+              activeTab === 'mappings'
+                ? 'bg-blue-500 text-white'
+                : 'bg-[#111827] text-[#9ca3af] hover:text-white'
+            }`}
+          >
+            Device Mapping ({availableIPs.filter(ip => !ip.is_mapped).length} tersedia)
+          </button>
+        </div>
+
+        {/* Labs Tab */}
+        {activeTab === 'labs' && (
+          <div className="space-y-4">
+            {labs.length === 0 ? (
+              <div className="bg-[#111827] rounded-xl border border-[#1f2937] p-12 text-center">
+                <p className="text-[#6b7280] mb-4">Belum ada lab yang dikonfigurasi</p>
+                <button
+                  onClick={() => setShowAddLabModal(true)}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm font-medium"
+                >
+                  Tambah Lab Pertama
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {labs.map(lab => {
+                  const summary = getNetworkSummary(lab.id)
+                  return (
+                    <div
+                      key={lab.id}
+                      className="bg-[#111827] rounded-xl border border-[#1f2937] p-6 hover:border-blue-500/50 transition-all"
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-lg font-semibold text-white truncate">{lab.name}</h3>
+                          <p className="text-xs text-[#6b7280] font-mono truncate">{lab.ap_ip}</p>
+                        </div>
+                        <span
+                          className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ml-2 ${
+                            lab.is_active
+                              ? 'bg-emerald-500/10 text-emerald-400'
+                              : 'bg-gray-500/10 text-gray-400'
+                          }`}
+                        >
+                          {lab.is_active ? 'Aktif' : 'Nonaktif'}
+                        </span>
+                      </div>
+                      
+                      <div className="mb-3">
+                        <span className="inline-block px-2 py-1 bg-indigo-500/10 text-indigo-400 rounded text-xs font-medium">
+                          {lab.network_type || 'Lab'}
+                        </span>
+                      </div>
+
+                      {lab.description && (
+                        <p className="text-xs text-[#6b7280] mb-3 line-clamp-2">{lab.description}</p>
+                      )}
+                      
+                      <div className="bg-[#0a0e1a] rounded-lg p-3 mb-4 space-y-2">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-[#9ca3af]">Total Devices</span>
+                          <span className="text-white font-semibold">{summary.total}</span>
+                        </div>
+                        {Object.entries(summary.byType).map(([type, count]) => (
+                          <div key={type} className="flex items-center justify-between text-xs">
+                            <span className="text-[#6b7280] flex items-center gap-1">
+                              {getDeviceIcon(type as DeviceType)}
+                              {type}
+                            </span>
+                            <span className="text-[#9ca3af]">{count}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            setEditingLab(lab)
+                            setLabForm({ 
+                              name: lab.name, 
+                              ap_ip: lab.ap_ip,
+                              network_type: lab.network_type || 'Lab',
+                              description: lab.description || ''
+                            })
+                            setShowAddLabModal(true)
+                          }}
+                          className="flex-1 px-3 py-2 bg-[#0a0e1a] hover:bg-[#1f2937] text-white rounded-lg transition-colors text-sm"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteLab(lab.id)}
+                          className="flex-1 px-3 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors text-sm"
+                        >
+                          Hapus
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Network Summary Tab */}
+        {activeTab === 'network' && (
+          <div className="space-y-4">
+            {labs.length === 0 ? (
+              <div className="bg-[#111827] rounded-xl border border-[#1f2937] p-12 text-center">
+                <p className="text-[#6b7280]">Buat lab terlebih dahulu untuk melihat network summary</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-4">
+                {labs.map(lab => {
+                  const summary = getNetworkSummary(lab.id)
+                  const labMappings = mappings.filter(m => m.lab_id === lab.id)
+                  
+                  return (
+                    <div
+                      key={lab.id}
+                      className="bg-[#111827] rounded-xl border border-[#1f2937] overflow-hidden"
+                    >
+                      <div className="border-b border-[#1f2937] px-6 py-4 bg-[#0f1419]">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h2 className="text-lg font-semibold text-white">{lab.name}</h2>
+                            <p className="text-sm text-[#6b7280] mt-0.5">
+                              {lab.ap_ip} • {lab.network_type || 'Lab'}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-2xl font-bold text-white">{summary.total}</div>
+                            <div className="text-xs text-[#6b7280]">Total Devices</div>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {labMappings.length === 0 ? (
+                        <div className="p-12 text-center">
+                          <p className="text-[#6b7280]">Belum ada device yang dipetakan</p>
+                        </div>
+                      ) : (
+                        <div className="p-6 space-y-2">
+                          {labMappings
+                            .sort((a, b) => a.seat - b.seat)
+                            .map(mapping => (
+                              <div
+                                key={mapping.id}
+                                className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-[#0a0e1a] rounded-lg gap-3"
+                              >
+                                <div className="flex items-center gap-3 flex-1 min-w-0">
+                                  <div className="text-blue-400">
+                                    {getDeviceIcon(mapping.device_type)}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      <span className="px-2 py-1 bg-blue-500/10 text-blue-400 rounded text-xs font-medium">
+                                        {mapping.label}
+                                      </span>
+                                      <span className="px-2 py-1 bg-purple-500/10 text-purple-400 rounded text-xs">
+                                        {mapping.device_type}
+                                      </span>
+                                    </div>
+                                    <p className="text-white font-mono text-sm mt-1">{mapping.client_ip}</p>
+                                    {mapping.description && (
+                                      <p className="text-xs text-[#6b7280] mt-1">{mapping.description}</p>
+                                    )}
+                                  </div>
+                                </div>
+                                <button
+                                  onClick={() => handleUnmapIP(mapping)}
+                                  className="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors text-xs w-full sm:w-auto"
+                                >
+                                  Hapus
+                                </button>
+                              </div>
+                            ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* IP Mappings Tab */}
+        {activeTab === 'mappings' && (
+          <div className="space-y-4">
+            {labs.length === 0 ? (
+              <div className="bg-[#111827] rounded-xl border border-[#1f2937] p-12 text-center">
+                <p className="text-[#6b7280]">Buat lab terlebih dahulu untuk mapping device</p>
+              </div>
+            ) : (
+              <>
+                {/* Lab Selector & Device Type */}
+                <div className="bg-[#111827] rounded-xl border border-[#1f2937] p-4 space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-white mb-2">
+                      Pilih Lab untuk Mapping
+                    </label>
+                    <select
+                      value={selectedLabId}
+                      onChange={(e) => setSelectedLabId(e.target.value)}
+                      className="w-full px-4 py-2 bg-[#0a0e1a] border border-[#1f2937] rounded-lg text-white focus:border-blue-500 focus:outline-none"
+                    >
+                      <option value="">-- Pilih Lab --</option>
+                      {labs.map(lab => {
+                        const summary = getNetworkSummary(lab.id)
+                        return (
+                          <option key={lab.id} value={lab.id}>
+                            {lab.name} ({summary.total} devices)
+                          </option>
+                        )
+                      })}
+                    </select>
+                  </div>
+
+                  {selectedLabId && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-white mb-2">
+                          Device Type
+                        </label>
+                        <select
+                          value={ipMappingForm.device_type}
+                          onChange={(e) => setIpMappingForm({ ...ipMappingForm, device_type: e.target.value as DeviceType, label: '' })}
+                          className="w-full px-4 py-2 bg-[#0a0e1a] border border-[#1f2937] rounded-lg text-white focus:border-blue-500 focus:outline-none"
+                        >
+                          <option value="PC">PC</option>
+                          <option value="AP">Access Point</option>
+                          <option value="Client">Client</option>
+                          <option value="Server">Server</option>
+                          <option value="Printer">Printer</option>
+                          <option value="Other">Other</option>
+                        </select>
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm font-medium text-white mb-2">
+                          Label (opsional)
+                        </label>
+                        <input
+                          type="text"
+                          value={ipMappingForm.label}
+                          onChange={(e) => setIpMappingForm({ ...ipMappingForm, label: e.target.value })}
+                          placeholder="Auto-generate jika kosong"
+                          className="w-full px-4 py-2 bg-[#0a0e1a] border border-[#1f2937] rounded-lg text-white placeholder-[#6b7280] focus:border-blue-500 focus:outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-white mb-2">
+                          Description (opsional)
+                        </label>
+                        <input
+                          type="text"
+                          value={ipMappingForm.description}
+                          onChange={(e) => setIpMappingForm({ ...ipMappingForm, description: e.target.value })}
+                          placeholder="Deskripsi device"
+                          className="w-full px-4 py-2 bg-[#0a0e1a] border border-[#1f2937] rounded-lg text-white placeholder-[#6b7280] focus:border-blue-500 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Available IPs */}
+                <div className="bg-[#111827] rounded-xl border border-[#1f2937] overflow-hidden">
+                  <div className="border-b border-[#1f2937] px-4 md:px-6 py-4">
+                    <h2 className="text-lg font-semibold text-white">IP yang Tersedia</h2>
+                    <p className="text-sm text-[#6b7280] mt-0.5">
+                      Klik untuk map sebagai {ipMappingForm.device_type} ke lab yang dipilih
+                    </p>
+                  </div>
+                  
+                  <div className="overflow-x-auto">
+                    {availableIPs.filter(ip => !ip.is_mapped).length === 0 ? (
+                      <div className="p-12 text-center">
+                        <p className="text-[#6b7280]">Semua IP sudah dipetakan</p>
+                      </div>
+                    ) : (
+                      <div className="p-4 md:p-6 space-y-2">
+                        {availableIPs
+                          .filter(ip => !ip.is_mapped)
+                          .map(ip => (
+                            <div
+                              key={ip.client_ip}
+                              className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-[#0a0e1a] rounded-lg hover:bg-[#1f2937] transition-colors gap-3"
+                            >
+                              <div className="flex-1 min-w-0">
+                                <p className="text-white font-mono text-sm sm:text-base truncate">
+                                  {ip.client_ip}
+                                </p>
+                                <p className="text-xs text-[#6b7280] mt-1">
+                                  {ip.ap_name} • {ip.query_count} queries • Last seen:{' '}
+                                  {new Date(ip.last_seen).toLocaleString('id-ID', {
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  })}
+                                </p>
+                              </div>
+                              <button
+                                onClick={() => handleMapIP(ip)}
+                                disabled={!selectedLabId}
+                                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:opacity-50 text-white rounded-lg transition-colors text-sm font-medium w-full sm:w-auto"
+                              >
+                                Map sebagai {ipMappingForm.device_type}
+                              </button>
+                            </div>
+                          ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Add/Edit Lab Modal */}
+      {showAddLabModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-[#111827] rounded-xl border border-[#1f2937] w-full max-w-md">
+            <div className="border-b border-[#1f2937] px-6 py-4">
+              <h2 className="text-lg font-semibold text-white">
+                {editingLab ? 'Edit Lab' : 'Tambah Lab Baru'}
+              </h2>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-white mb-2">
+                  Nama Lab
+                </label>
+                <input
+                  type="text"
+                  value={labForm.name}
+                  onChange={(e) => setLabForm({ ...labForm, name: e.target.value })}
+                  placeholder="Lab Komputer 1, Lapkom A, Lab Multimedia, dsb"
+                  className="w-full px-4 py-2 bg-[#0a0e1a] border border-[#1f2937] rounded-lg text-white placeholder-[#6b7280] focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-white mb-2">
+                  AP IP Address
+                </label>
+                <input
+                  type="text"
+                  value={labForm.ap_ip}
+                  onChange={(e) => setLabForm({ ...labForm, ap_ip: e.target.value })}
+                  placeholder="192.168.1.1"
+                  className="w-full px-4 py-2 bg-[#0a0e1a] border border-[#1f2937] rounded-lg text-white placeholder-[#6b7280] focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-white mb-2">
+                  Network Type
+                </label>
+                <select
+                  value={labForm.network_type}
+                  onChange={(e) => setLabForm({ ...labForm, network_type: e.target.value as NetworkType })}
+                  className="w-full px-4 py-2 bg-[#0a0e1a] border border-[#1f2937] rounded-lg text-white focus:border-blue-500 focus:outline-none"
+                >
+                  <option value="Lab">Lab</option>
+                  <option value="Office">Office</option>
+                  <option value="Public">Public</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-white mb-2">
+                  Description (opsional)
+                </label>
+                <textarea
+                  value={labForm.description}
+                  onChange={(e) => setLabForm({ ...labForm, description: e.target.value })}
+                  placeholder="Deskripsi singkat tentang lab ini"
+                  rows={3}
+                  className="w-full px-4 py-2 bg-[#0a0e1a] border border-[#1f2937] rounded-lg text-white placeholder-[#6b7280] focus:border-blue-500 focus:outline-none resize-none"
+                />
+              </div>
+            </div>
+            
+            <div className="border-t border-[#1f2937] px-6 py-4 flex gap-3">
+              <button
+                onClick={() => {
+                  setShowAddLabModal(false)
+                  setEditingLab(null)
+                  setLabForm({ name: '', ap_ip: '', network_type: 'Lab', description: '' })
+                }}
+                className="flex-1 px-4 py-2 bg-[#0a0e1a] hover:bg-[#1f2937] text-white rounded-lg transition-colors"
+              >
+                Batal
+              </button>
+              <button
+                onClick={handleAddLab}
+                className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium"
+              >
+                {editingLab ? 'Simpan' : 'Tambah'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

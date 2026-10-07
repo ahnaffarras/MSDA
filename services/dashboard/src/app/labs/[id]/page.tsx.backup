@@ -1,0 +1,204 @@
+'use client'
+
+import { useState, useEffect, use } from 'react'
+
+type Event = {
+  _id: string
+  domain: string
+  client_ip: string
+  ap_ip: string
+  ap_name: string
+  timestamp: string
+  detected: boolean
+  group?: string
+}
+
+type PageProps = {
+  params: Promise<{ id: string }>
+}
+
+export default function LabPage({ params }: PageProps) {
+  const resolvedParams = use(params)
+  const labId = resolvedParams.id
+  const [events, setEvents] = useState<Event[]>([])
+  const [loading, setLoading] = useState(true)
+  const [stats, setStats] = useState({ total: 0, threats: 0, clients: 0 })
+
+  useEffect(() => {
+    fetchData()
+    const interval = setInterval(fetchData, 10000)
+    return () => clearInterval(interval)
+  }, [labId])
+
+  const fetchData = async () => {
+    try {
+      const res = await fetch('/api/events?limit=100')
+      const data: Event[] = await res.json()
+      
+      // Filter by lab
+      let filtered = data
+      if (labId !== 'all') {
+        // Assuming ap_name contains "Lab 1", "Lab 2", etc.
+        filtered = data.filter(e => 
+          e.ap_name?.toLowerCase().includes(`lab ${labId}`) || 
+          e.ap_name?.toLowerCase().includes(`lab${labId}`)
+        )
+      }
+      
+      setEvents(filtered)
+      
+      // Calculate stats
+      const threats = filtered.filter(e => e.detected).length
+      const uniqueClients = new Set(filtered.map(e => e.client_ip)).size
+      setStats({ total: filtered.length, threats, clients: uniqueClients })
+    } catch (error) {
+      console.error('Failed to fetch:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const labName = labId === 'all' ? 'Semua Lab' : `Lab ${labId}`
+  const recentEvents = events.slice(0, 20)
+
+  return (
+    <div className="min-h-screen bg-[#0a0e1a]">
+      {/* Header */}
+      <div className="border-b border-[#1f2937] bg-[#0f1419]">
+        <div className="px-8 py-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-semibold text-white tracking-tight">{labName}</h1>
+              <p className="text-sm text-[#6b7280] mt-1">Monitor aktivitas DNS untuk {labName.toLowerCase()}</p>
+            </div>
+            <button 
+              onClick={fetchData}
+              disabled={loading}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:opacity-50 text-white rounded-lg transition-colors text-sm font-medium"
+            >
+              {loading ? 'Refreshing...' : 'Refresh'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="px-8 py-8">
+        {/* Stats */}
+        <div className="grid grid-cols-3 gap-6 mb-8">
+          <div className="bg-[#111827] rounded-xl border border-[#1f2937] p-6">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="p-2 bg-blue-500/10 rounded-lg">
+                <svg className="w-5 h-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+              </div>
+              <span className="text-sm text-[#6b7280] font-medium">Total Queries</span>
+            </div>
+            <div className="text-3xl font-bold text-white">{stats.total.toLocaleString()}</div>
+          </div>
+
+          <div className="bg-[#111827] rounded-xl border border-[#1f2937] p-6">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="p-2 bg-red-500/10 rounded-lg">
+                <svg className="w-5 h-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <span className="text-sm text-[#6b7280] font-medium">Threats Blocked</span>
+            </div>
+            <div className="text-3xl font-bold text-white">{stats.threats.toLocaleString()}</div>
+          </div>
+
+          <div className="bg-[#111827] rounded-xl border border-[#1f2937] p-6">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="p-2 bg-emerald-500/10 rounded-lg">
+                <svg className="w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+              </div>
+              <span className="text-sm text-[#6b7280] font-medium">Active Clients</span>
+            </div>
+            <div className="text-3xl font-bold text-white">{stats.clients.toLocaleString()}</div>
+          </div>
+        </div>
+
+        {/* Activity Table */}
+        <div className="bg-[#111827] rounded-xl border border-[#1f2937]">
+          <div className="border-b border-[#1f2937] px-6 py-4">
+            <h2 className="text-lg font-semibold text-white">Recent Activity</h2>
+          </div>
+          
+          <div className="overflow-x-auto">
+            {loading ? (
+              <div className="flex items-center justify-center py-16">
+                <div className="w-12 h-12 border-4 border-[#1f2937] border-t-blue-500 rounded-full animate-spin"></div>
+              </div>
+            ) : recentEvents.length === 0 ? (
+              <div className="text-center py-16">
+                <div className="w-16 h-16 bg-[#1f2937] rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-8 h-8 text-[#6b7280]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                  </svg>
+                </div>
+                <p className="text-[#6b7280]">Tidak ada aktivitas di lab ini</p>
+              </div>
+            ) : (
+              <table className="w-full">
+                <thead className="bg-[#0a0e1a] border-b border-[#1f2937]">
+                  <tr>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-[#9ca3af] uppercase tracking-wider">Status</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-[#9ca3af] uppercase tracking-wider">Domain</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-[#9ca3af] uppercase tracking-wider">Client IP</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-[#9ca3af] uppercase tracking-wider">Access Point</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-[#9ca3af] uppercase tracking-wider">Time</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-[#9ca3af] uppercase tracking-wider">Category</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#1f2937]">
+                  {recentEvents.map((event) => (
+                    <tr key={event._id} className="hover:bg-[#0f1419] transition-colors">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {event.detected ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-red-500/10 text-red-400 rounded-lg text-xs font-medium border border-red-500/20">
+                            <span className="w-1.5 h-1.5 rounded-full bg-red-400"></span>
+                            Blocked
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-500/10 text-emerald-400 rounded-lg text-xs font-medium border border-emerald-500/20">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                            Allowed
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="text-sm text-white font-medium">{event.domain}</span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="text-sm text-[#9ca3af] font-mono">{event.client_ip}</span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="text-sm text-[#9ca3af]">{event.ap_name || event.ap_ip}</span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="text-sm text-[#6b7280]">
+                          {new Date(event.timestamp).toLocaleTimeString('id-ID')}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {event.group && (
+                          <span className="text-xs px-2 py-1 bg-blue-500/10 text-blue-400 rounded border border-blue-500/20">
+                            {event.group}
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}

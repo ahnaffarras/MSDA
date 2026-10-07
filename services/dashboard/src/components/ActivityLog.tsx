@@ -15,23 +15,23 @@ export function ActivityLog({ labGrid }: { labGrid: LabGridAP[] }) {
       <div className="flex items-center gap-2.5">
         <ListUl width={18} height={18} className="text-chalk-faint" />
         <div>
-          <h2 className="font-display text-lg font-semibold text-chalk">Log Aktivitas</h2>
-          <p className="text-sm text-chalk-dim">Akses DNS terbaru dari semua lab</p>
+          <h2 className="font-display text-lg font-semibold text-chalk">Activity log</h2>
+          <p className="text-sm text-chalk-dim">Latest DNS requests across all labs</p>
         </div>
       </div>
 
       {rows.length === 0 ? (
-        <p className="mt-5 text-sm text-chalk-dim">Belum ada aktivitas yang tercatat.</p>
+        <p className="mt-5 text-sm text-chalk-dim">No activity recorded yet.</p>
       ) : (
         <div className="mt-4 overflow-x-auto">
           <table className="w-full min-w-[560px] text-left text-sm">
             <thead>
               <tr className="border-b border-line text-xs uppercase tracking-wide text-chalk-faint">
-                <th className="pb-2 pr-3 font-medium">Waktu</th>
+                <th className="pb-2 pr-3 font-medium">Time</th>
                 <th className="pb-2 pr-3 font-medium">IP</th>
                 <th className="pb-2 pr-3 font-medium">AP</th>
                 <th className="pb-2 pr-3 font-medium">Domain</th>
-                <th className="pb-2 pr-3 font-medium">Aksi</th>
+                <th className="pb-2 pr-3 font-medium">Action</th>
                 <th className="pb-2 font-medium">Status</th>
               </tr>
             </thead>
@@ -59,7 +59,7 @@ export function ActivityLog({ labGrid }: { labGrid: LabGridAP[] }) {
                           backgroundColor: row.last_action === "blocked" ? "var(--accent-flag-bg)" : "var(--accent-safe-bg)",
                         }}
                       >
-                        {row.last_action === "blocked" ? "Diblokir" : "Diizinkan"}
+                        {row.last_action === "blocked" ? "Blocked" : "Allowed"}
                       </span>
                     </td>
                     <td className="py-2">

@@ -19,14 +19,14 @@ export function AlertsFeed({ labGrid }: { labGrid: LabGridAP[] }) {
       <div className="flex items-center gap-2.5">
         <ShieldExclamation width={18} height={18} className="text-chalk-faint" />
         <div>
-          <h2 className="font-display text-lg font-semibold text-chalk">Perlu Perhatian</h2>
-          <p className="text-sm text-chalk-dim">Domain diblokir dalam 8 jam terakhir</p>
+          <h2 className="font-display text-lg font-semibold text-chalk">Needs attention</h2>
+          <p className="text-sm text-chalk-dim">Domains blocked in the last 8 hours</p>
         </div>
       </div>
 
       {flagged.length === 0 ? (
         <p className="mt-5 text-sm text-chalk-dim">
-          Tidak ada akses domain yang diblokir pada sesi ini.
+          No blocked domain access in this session.
         </p>
       ) : (
         <ul className="mt-4 space-y-2.5">

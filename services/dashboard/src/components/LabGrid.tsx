@@ -30,8 +30,8 @@ export function LabGrid({
       {!apName && (
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
-            <h2 className="font-display text-lg font-semibold text-chalk">Denah Lab</h2>
-            <p className="text-sm text-chalk-dim">Domain terakhir yang diakses tiap PC</p>
+            <h2 className="font-display text-lg font-semibold text-chalk">Lab layout</h2>
+            <p className="text-sm text-chalk-dim">Last domain accessed by each PC</p>
           </div>
           <Legend />
         </div>
@@ -40,7 +40,7 @@ export function LabGrid({
       {apName && (
         <div className="mb-4 flex items-center justify-between gap-3">
           <p className="text-sm text-chalk-dim">
-            Domain terakhir yang diakses tiap PC · {seats.length} kursi
+            Last domain accessed by each PC · {seats.length} seats
           </p>
           <Legend />
         </div>
@@ -48,7 +48,7 @@ export function LabGrid({
 
       {/* Papan tulis */}
       <div className="mb-3 rounded-md border border-dashed border-line py-1.5 text-center text-[11px] tracking-[0.2em] text-chalk-faint">
-        PAPAN TULIS
+        WHITEBOARD
       </div>
 
       {/* Grid — 36 PC: 6 kolom × 6 baris */}
@@ -72,7 +72,7 @@ export function LabGrid({
                 opacity: inactive ? 0.45 : 1,
               }}
               aria-pressed={isSel}
-              title={event ? `${seat.student_label}: ${event.domain}` : `${seat.student_label} — tidak aktif`}
+              title={event ? `${seat.student_label}: ${event.domain}` : `${seat.student_label} — inactive`}
             >
               <Display
                 width={14}
@@ -121,7 +121,7 @@ export function LabGrid({
         <div className="mt-4 rounded-xl border border-line p-3">
           <p className="text-sm text-chalk-dim">
             <span className="font-medium text-chalk">{selected.student_label}</span> —{" "}
-            belum ada aktivitas DNS pada sesi ini.
+            no DNS activity in this session yet.
           </p>
         </div>
       )}

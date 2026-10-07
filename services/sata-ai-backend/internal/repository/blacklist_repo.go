@@ -45,8 +45,8 @@ func (r *BlacklistRepo) GetByID(ctx context.Context, id primitive.ObjectID) (*mo
 
 func (r *BlacklistRepo) Create(ctx context.Context, entry *model.DNSBlacklist) (*model.DNSBlacklist, error) {
 	entry.ID = primitive.NewObjectID()
-	entry.CreatedAt = time.Now()
-	entry.UpdatedAt = time.Now()
+	entry.CreatedAt = model.FlexTime{Time: time.Now()}
+	entry.UpdatedAt = model.FlexTime{Time: time.Now()}
 	_, err := r.col.InsertOne(ctx, entry)
 	if err != nil {
 		return nil, err

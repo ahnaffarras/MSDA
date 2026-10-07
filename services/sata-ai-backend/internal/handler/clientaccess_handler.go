@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strconv"
 	"time"
 
@@ -29,23 +30,17 @@ func (h *ClientAccessHandler) List(c *gin.Context) {
 	if limit < 1 || limit > 200 { limit = 20 }
 
 	filter := bson.M{}
-	if v := c.Query("domain");    v != "" { filter["domain"]       = bson.M{"$regex": v, "$options": "i"} }
+	if v := c.Query("domain");    v != "" { filter["domain"]       = bson.M{"$regex": regexp.QuoteMeta(v), "$options": "i"} }
 	if v := c.Query("client_ip"); v != "" { filter["client_ip"]    = v }
 	if v := c.Query("group");     v != "" { filter["group"]        = v }
 	if v := c.Query("action");    v != "" { filter["action"]       = v }
 	if v := c.Query("ap_ip");     v != "" { filter["ap_info.ip"]   = v }
 
-	if from := c.Query("from"); from != "" {
-		if t, err := time.Parse(time.RFC3339, from); err == nil {
-			if filter["timestamp"] == nil { filter["timestamp"] = bson.M{} }
-			filter["timestamp"].(bson.M)["$gte"] = t
-		}
-	}
-	if to := c.Query("to"); to != "" {
-		if t, err := time.Parse(time.RFC3339, to); err == nil {
-			if filter["timestamp"] == nil { filter["timestamp"] = bson.M{} }
-			filter["timestamp"].(bson.M)["$lte"] = t
-		}
+	if from, to := c.Query("from"), c.Query("to"); from != "" || to != "" {
+		start, end := time.Unix(0, 0).UTC(), time.Now().UTC().Add(time.Minute)
+		if t, err := time.Parse(time.RFC3339, from); err == nil { start = t }
+		if t, err := time.Parse(time.RFC3339, to); err == nil { end = t }
+		for k, v := range repository.TimeRange(start, end) { filter[k] = v }
 	}
 
 	items, total, err := h.repo.List(c.Request.Context(), filter, page, limit)
@@ -96,7 +91,7 @@ func (h *ClientAccessHandler) Export(c *gin.Context) {
 	rangeStr := c.DefaultQuery("range", "today")
 	from, to := parseRange(rangeStr)
 
-	filter := bson.M{"timestamp": bson.M{"$gte": from, "$lte": to}}
+	filter := repository.TimeRange(from, to)
 	items, _, err := h.repo.List(c.Request.Context(), filter, 1, 5000)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

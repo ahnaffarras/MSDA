@@ -26,7 +26,15 @@ function buildClientPromise(): Promise<MongoClient> {
       )
     );
   }
-  return new MongoClient(uri).connect();
+  const promise = new MongoClient(uri).connect();
+  // Koneksi yang GAGAL (mis. MongoDB belum siap saat container start) tidak boleh
+  // di-cache selamanya: kosongkan agar pemanggilan berikutnya mencoba menyambung lagi.
+  // (Tanpa ini satu kegagalan awal merusak semua route API sampai proses di-restart.)
+  promise.catch(() => {
+    if (global._mongoClientPromise === promise) global._mongoClientPromise = undefined;
+    if (_prodPromise === promise) _prodPromise = undefined;
+  });
+  return promise;
 }
 
 function getClientPromise(): Promise<MongoClient> {

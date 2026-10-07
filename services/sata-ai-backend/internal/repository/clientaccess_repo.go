@@ -11,12 +11,16 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+// AccessLogCollection adalah koleksi log akses DNS per client.
+// Ditulis oleh n8n (node "Mongodb Insert: ip_access_dns") dan dibaca juga oleh dashboard.
+const AccessLogCollection = "ip_access_dns"
+
 type ClientAccessRepo struct {
 	col *mongo.Collection
 }
 
 func NewClientAccessRepo(db *mongo.Database) *ClientAccessRepo {
-	return &ClientAccessRepo{col: db.Collection("client_access_dns")}
+	return &ClientAccessRepo{col: db.Collection(AccessLogCollection)}
 }
 
 func (r *ClientAccessRepo) List(ctx context.Context, filter bson.M, page, limit int) ([]model.ClientAccessDNS, int64, error) {
@@ -44,13 +48,13 @@ func (r *ClientAccessRepo) GetByID(ctx context.Context, id primitive.ObjectID) (
 }
 
 func (r *ClientAccessRepo) Stats(ctx context.Context, from, to time.Time) (*model.ClientAccessStats, error) {
-	match := bson.M{"timestamp": bson.M{"$gte": from, "$lte": to}}
+	match := TimeRange(from, to)
 
 	// Per day
 	perDayPipe := mongo.Pipeline{
 		{{"$match", match}},
 		{{"$group", bson.M{
-			"_id":   bson.M{"$dateToString": bson.M{"format": "%Y-%m-%d", "date": "$timestamp"}},
+			"_id":   bson.M{"$dateToString": bson.M{"format": "%Y-%m-%d", "date": bson.M{"$toDate": "$timestamp"}}},
 			"count": bson.M{"$sum": 1},
 		}}},
 		{{"$sort", bson.D{{Key: "_id", Value: 1}}}},
@@ -117,7 +121,7 @@ func (r *ClientAccessRepo) Stats(ctx context.Context, from, to time.Time) (*mode
 }
 
 func (r *ClientAccessRepo) Summary(ctx context.Context, from, to time.Time) (*model.DashboardSummary, error) {
-	match := bson.M{"timestamp": bson.M{"$gte": from, "$lte": to}}
+	match := TimeRange(from, to)
 
 	totalQueries, _ := r.col.CountDocuments(ctx, match)
 
@@ -126,7 +130,8 @@ func (r *ClientAccessRepo) Summary(ctx context.Context, from, to time.Time) (*mo
 	uniqueDomains := int64(len(domainVals))
 
 	// Blacklist hits
-	blacklistMatch := bson.M{"timestamp": bson.M{"$gte": from, "$lte": to}, "action": "blocked"}
+	blacklistMatch := TimeRange(from, to)
+	blacklistMatch["action"] = "blocked"
 	blacklistHits, _ := r.col.CountDocuments(ctx, blacklistMatch)
 
 	// Blacklist clients
@@ -143,7 +148,7 @@ func (r *ClientAccessRepo) Summary(ctx context.Context, from, to time.Time) (*mo
 
 func (r *ClientAccessRepo) LabGrid(ctx context.Context, from time.Time) ([]model.LabGridAP, error) {
 	pipe := mongo.Pipeline{
-		{{"$match", bson.M{"timestamp": bson.M{"$gte": from}}}},
+		{{"$match", TimeRange(from, time.Now().UTC().Add(time.Minute))}},
 		{{"$sort", bson.D{{Key: "timestamp", Value: -1}}}},
 		{{"$group", bson.M{
 			"_id":        bson.M{"client_ip": "$client_ip", "ap_ip": "$ap_info.ip", "ap_label": "$ap_info.label"},
@@ -159,7 +164,7 @@ func (r *ClientAccessRepo) LabGrid(ctx context.Context, from time.Time) ([]model
 				"last_domain": "$last_domain",
 				"last_action": "$last_action",
 				"last_seen":   "$last_seen",
-				"risk_level":  "$type",
+				"type":        "$type",
 			}},
 		}}},
 	}
@@ -183,6 +188,10 @@ func (r *ClientAccessRepo) LabGrid(ctx context.Context, from time.Time) ([]model
 
 	result := make([]model.LabGridAP, 0, len(rows))
 	for _, row := range rows {
+		for i := range row.Clients {
+			c := &row.Clients[i]
+			c.RiskLevel = RiskLevel(c.Type, c.LastAction)
+		}
 		result = append(result, model.LabGridAP{
 			APIP:    row.ID.APIP,
 			APLabel: row.ID.APLabel,
@@ -193,7 +202,7 @@ func (r *ClientAccessRepo) LabGrid(ctx context.Context, from time.Time) ([]model
 }
 
 func (r *ClientAccessRepo) TopDomains(ctx context.Context, from, to time.Time, domainType string, limit int) ([]model.TopDomain, error) {
-	match := bson.M{"timestamp": bson.M{"$gte": from, "$lte": to}}
+	match := TimeRange(from, to)
 	if domainType != "" {
 		match["type"] = domainType
 	}
@@ -228,7 +237,8 @@ func (r *ClientAccessRepo) TopDomains(ctx context.Context, from, to time.Time, d
 }
 
 func (r *ClientAccessRepo) TopClients(ctx context.Context, from, to time.Time, limit int) ([]model.TopClient, error) {
-	match := bson.M{"timestamp": bson.M{"$gte": from, "$lte": to}, "action": "blocked"}
+	match := TimeRange(from, to)
+	match["action"] = "blocked"
 	pipe := mongo.Pipeline{
 		{{"$match", match}},
 		{{"$group", bson.M{
@@ -256,4 +266,31 @@ func (r *ClientAccessRepo) TopClients(ctx context.Context, from, to time.Time, l
 		result = append(result, model.TopClient{ClientIP: row.ID.ClientIP, APLabel: row.ID.APLabel, BlacklistHits: row.Count})
 	}
 	return result, nil
+}
+
+// TimeRange membuat filter rentang waktu yang cocok untuk field `timestamp`
+// bertipe BSON Date maupun string ISO-8601 (format JS: 2026-08-27T05:34:55.293Z).
+// Perbandingan string ISO sama urutannya dengan urutan waktu, dan MongoDB hanya
+// membandingkan antar-tipe yang sama, jadi kedua cabang $or tidak saling mengganggu.
+func TimeRange(from, to time.Time) bson.M {
+	const isoMs = "2006-01-02T15:04:05.000Z"
+	return bson.M{"$or": []bson.M{
+		{"timestamp": bson.M{"$gte": from, "$lte": to}},
+		{"timestamp": bson.M{"$gte": from.UTC().Format(isoMs), "$lte": to.UTC().Format(isoMs)}},
+	}}
+}
+
+// RiskLevel menurunkan tingkat risiko dari kategori domain + aksi.
+// Aturannya sama dengan dashboard (lib/domain-risk.ts dan lib/query.ts).
+func RiskLevel(domainType, action string) string {
+	if action == "blocked" {
+		return "flag"
+	}
+	switch domainType {
+	case "gambling", "adult", "malware", "phishing", "crypto_miner":
+		return "flag"
+	case "social_media", "streaming", "gaming":
+		return "watch"
+	}
+	return "safe"
 }

@@ -1,37 +1,55 @@
-import type { Metadata } from "next";
-import { Space_Grotesk, Inter, JetBrains_Mono } from "next/font/google";
+import type { Metadata, Viewport } from "next";
+import { Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
+import ClientLayout from "@/components/ClientLayout";
 import "./globals.css";
 
-const spaceGrotesk = Space_Grotesk({
-  variable: "--font-display",
+const sans = Plus_Jakarta_Sans({
+  variable: "--f-sans",
   subsets: ["latin"],
-  weight: ["500", "600", "700"],
+  display: "swap",
 });
 
-const inter = Inter({
-  variable: "--font-body",
-  subsets: ["latin"],
-});
-
-const jetbrainsMono = JetBrains_Mono({
-  variable: "--font-data",
+const mono = JetBrains_Mono({
+  variable: "--f-mono",
   subsets: ["latin"],
   weight: ["400", "500"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "SATA — Pengawasan Lab Komputer",
+  title: "SATA — Smart AP Traffic Analyzer",
   description:
-    "Smart AP Traffic Analyzer: memantau trafik DNS lab komputer per access point untuk guru dan admin jaringan.",
+    "Monitor DNS traffic per access point across labs and classrooms, for teachers and network administrators.",
 };
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f3f6fb" },
+    { media: "(prefers-color-scheme: dark)", color: "#0a1020" },
+  ],
+};
+
+/**
+ * Dijalankan sebelum React hydrate supaya tema tersimpan langsung terpasang
+ * (tanpa kedip terang → gelap). Default mengikuti pengaturan sistem.
+ */
+const themeInit = `(function(){try{var t=localStorage.getItem('sata-theme');if(t!=='light'&&t!=='dark'){t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}var r=document.documentElement;r.classList.remove('light','dark');r.classList.add(t)}catch(e){document.documentElement.classList.add('light')}})();`;
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
-      lang="id"
-      className={`${spaceGrotesk.variable} ${inter.variable} ${jetbrainsMono.variable} h-full antialiased`}
+      lang="en"
+      suppressHydrationWarning
+      className={`${sans.variable} ${mono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInit }} />
+      </head>
+      <body className="min-h-screen">
+        <ClientLayout>{children}</ClientLayout>
+      </body>
     </html>
   );
 }

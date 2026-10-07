@@ -7,7 +7,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sata-ai/backend/internal/model"
 	"github.com/sata-ai/backend/internal/repository"
-	"go.mongodb.org/mongo-driver/bson"
 )
 
 type AccessPointHandler struct {
@@ -42,10 +41,8 @@ func (h *AccessPointHandler) Clients(c *gin.Context) {
 	apIP := c.Param("ap_ip")
 	from := time.Now().UTC().Add(-8 * time.Hour)
 
-	filter := bson.M{
-		"ap_info.ip":  apIP,
-		"timestamp":   bson.M{"$gte": from},
-	}
+	filter := repository.TimeRange(from, time.Now().UTC().Add(time.Minute))
+	filter["ap_info.ip"] = apIP
 
 	items, _, err := h.repo.List(c.Request.Context(), filter, 1, 200)
 	if err != nil {
@@ -64,7 +61,7 @@ func (h *AccessPointHandler) Clients(c *gin.Context) {
 				LastDomain: item.Domain,
 				LastAction: item.Action,
 				LastSeen:   item.Timestamp,
-				RiskLevel:  item.Type,
+				RiskLevel:  repository.RiskLevel(item.Type, item.Action),
 			})
 		}
 	}
