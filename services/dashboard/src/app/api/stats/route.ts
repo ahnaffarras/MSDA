@@ -2,14 +2,14 @@ import { NextResponse } from 'next/server'
 import { MongoClient } from 'mongodb'
 import { sinceFilter } from '@/lib/query'
 
-const uri = process.env.MONGODB_URI || 'mongodb://sata:sata123@mongo:27017/sata?authSource=admin'
+const uri = process.env.MONGODB_URI || 'mongodb://msda:msda123@mongo:27017/msda?authSource=admin'
 
 export async function GET() {
   let client: MongoClient | null = null
   
   try {
     client = await MongoClient.connect(uri)
-    const db = client.db('sata')
+    const db = client.db(process.env.MONGODB_DB || 'msda')
     
     // Get current time and 5 minutes ago for active clients
     

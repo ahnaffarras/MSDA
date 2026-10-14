@@ -17,7 +17,7 @@ const mono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SATA — Smart AP Traffic Analyzer",
+  title: "MSDA — MikroTik Smart DNS Analytics",
   description:
     "Monitor DNS traffic per access point across labs and classrooms, for teachers and network administrators.",
 };
@@ -35,7 +35,7 @@ export const viewport: Viewport = {
  * Dijalankan sebelum React hydrate supaya tema tersimpan langsung terpasang
  * (tanpa kedip terang → gelap). Default mengikuti pengaturan sistem.
  */
-const themeInit = `(function(){try{var t=localStorage.getItem('sata-theme');if(t!=='light'&&t!=='dark'){t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}var r=document.documentElement;r.classList.remove('light','dark');r.classList.add(t)}catch(e){document.documentElement.classList.add('light')}})();`;
+const themeInit = `(function(){try{var t=localStorage.getItem('msda-theme');if(t!=='light'&&t!=='dark'){t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}var r=document.documentElement;r.classList.remove('light','dark');r.classList.add(t)}catch(e){document.documentElement.classList.add('light')}})();`;
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (

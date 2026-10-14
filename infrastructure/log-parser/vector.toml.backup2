@@ -1,7 +1,7 @@
 data_dir = "/var/lib/vector"
 
 # =============================================================
-# SATA - Vector.dev Config (Raw UDP Socket Mode)
+# MSDA - Vector.dev Config (Raw UDP Socket Mode)
 # Menerima raw syslog dari Mikrotik RouterOS via UDP Port 514,
 # parsing ke JSON, batching, lalu POST ke webhook n8n.
 # =============================================================
@@ -49,7 +49,7 @@ if err == null {
     }
 }
 
-# Bersihkan field ekstra yang tidak ada dalam skema spesifikasi SATA
+# Bersihkan field ekstra yang tidak ada dalam skema spesifikasi MSDA
 del(.host)
 del(.port)
 del(.parse_error)
@@ -78,7 +78,7 @@ batch.max_events = 100
 batch.timeout_secs = 10
 
 request.headers.Content-Type = "application/json"
-request.headers.X-SATA-Token = "${SATA_WEBHOOK_TOKEN:-changeme-token}"
+request.headers.X-MSDA-Token = "${MSDA_WEBHOOK_TOKEN:-changeme-token}"
 
 request.retry_attempts = 10
 request.retry_initial_backoff_secs = 5

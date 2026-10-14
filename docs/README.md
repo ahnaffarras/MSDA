@@ -1,10 +1,10 @@
-# SATA Project Documentation
+# MSDA Project Documentation
 
-This document outlines the architecture and development roadmap for the Smart AP Traffic Analyzer (SATA) project.
+This document outlines the architecture and development roadmap for the MikroTik Smart DNS Analytics (MSDA) project.
 
 ## Overview
 
-SATA is a network intelligence platform that collects DNS activity from MikroTik access points, transforms it into structured JSON, runs AI-based analysis, and pushes actionable insights to Slack and dashboard interfaces.
+MSDA is a network intelligence platform that collects DNS activity from MikroTik access points, transforms it into structured JSON, runs AI-based analysis, and pushes actionable insights to Slack and dashboard interfaces.
 
 ## Phase 1: Core Pipeline Objectives
 
@@ -48,7 +48,7 @@ The repository currently contains the initial scaffolding for:
 
 ## Expected Deliverables
 
-By completion, SATA should provide:
+By completion, MSDA should provide:
 - automated DNS log ingestion
 - AI-based analytics summaries
 - scheduled Slack reporting

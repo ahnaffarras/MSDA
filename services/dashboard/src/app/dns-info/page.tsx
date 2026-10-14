@@ -85,7 +85,7 @@ function DNSInfoContent() {
       <PageHeader
         crumbs={[{ label: "Dashboard", href: "/" }, { label: "Domain Info" }]}
         title="Domain Info"
-        description="Ownership, hosting, and network details for the domains SATA has seen."
+        description="Ownership, hosting, and network details for the domains MSDA has seen."
         actions={
           <button
             onClick={fetchDNSInfo}

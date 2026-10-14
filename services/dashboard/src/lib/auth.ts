@@ -29,7 +29,7 @@ const scrypt = promisify(scryptCb) as (
 
 /* ───────────────────────────── konfigurasi ───────────────────────────── */
 
-const SESSION_HOURS = Math.min(Math.max(Number(process.env.SATA_SESSION_HOURS) || 12, 1), 24 * 30)
+const SESSION_HOURS = Math.min(Math.max(Number(process.env.MSDA_SESSION_HOURS) || 12, 1), 24 * 30)
 export const SESSION_MAX_AGE_S = Math.round(SESSION_HOURS * 3600)
 
 const MAX_FAILS_PER_USER = 5
@@ -175,7 +175,8 @@ export function readSessionToken(request: Request): string | null {
   for (const part of header.split(';')) {
     const i = part.indexOf('=')
     if (i < 0) continue
-    if (part.slice(0, i).trim() === SESSION_COOKIE) {
+    const name = part.slice(0, i).trim()
+    if (name === SESSION_COOKIE) {
       const value = part.slice(i + 1).trim()
       return value || null
     }
@@ -284,9 +285,9 @@ export function clientIp(request: Request): string {
   return (request.headers.get('x-real-ip') ?? 'unknown').slice(0, 64)
 }
 
-/** Cookie diberi flag Secure bila diakses lewat HTTPS (atau dipaksa lewat SATA_COOKIE_SECURE). */
+/** Cookie diberi flag Secure bila diakses lewat HTTPS (atau dipaksa lewat MSDA_COOKIE_SECURE). */
 export function isSecureRequest(request: Request): boolean {
-  const forced = process.env.SATA_COOKIE_SECURE
+  const forced = process.env.MSDA_COOKIE_SECURE
   if (forced === 'true') return true
   if (forced === 'false') return false
   const proto = request.headers.get('x-forwarded-proto')
@@ -304,7 +305,7 @@ let bootstrapped = false
 
 /**
  * Bila belum ada pengguna sama sekali, buat administrator pertama dari
- * SATA_BOOTSTRAP_ADMIN_USER / SATA_BOOTSTRAP_ADMIN_PASSWORD. Kalau kata sandi tidak
+ * MSDA_BOOTSTRAP_ADMIN_USER / MSDA_BOOTSTRAP_ADMIN_PASSWORD. Kalau kata sandi tidak
  * diisi (atau terlalu lemah), dibuat kata sandi acak dan dicetak SEKALI ke log server.
  */
 export async function ensureBootstrapAdmin(): Promise<void> {
@@ -315,15 +316,15 @@ export async function ensureBootstrapAdmin(): Promise<void> {
     return
   }
 
-  const username = normalizeUsername(process.env.SATA_BOOTSTRAP_ADMIN_USER || 'admin') ?? 'admin'
-  let password = process.env.SATA_BOOTSTRAP_ADMIN_PASSWORD ?? ''
+  const username = normalizeUsername(process.env.MSDA_BOOTSTRAP_ADMIN_USER || 'admin') ?? 'admin'
+  let password = process.env.MSDA_BOOTSTRAP_ADMIN_PASSWORD ?? ''
   let generated = false
   if (!password) {
     generated = true
   } else {
     const problem = validatePassword(password, username)
     if (problem) {
-      console.warn(`[auth] SATA_BOOTSTRAP_ADMIN_PASSWORD ditolak (${problem}). Membuat kata sandi acak.`)
+      console.warn(`[auth] MSDA_BOOTSTRAP_ADMIN_PASSWORD ditolak (${problem}). Membuat kata sandi acak.`)
       generated = true
     }
   }

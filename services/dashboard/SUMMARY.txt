@@ -82,7 +82,7 @@ DOCUMENTATION:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 1. Install dependencies:
-   cd /home/turgocloud/sata-ai-prod/sata-ai/services/dashboard
+   cd /home/turgocloud/msda-prod/msda/services/dashboard
    npm install
 
 2. Seed data awal (opsional):
@@ -234,7 +234,7 @@ IP tidak muncul di "Available"?
   → IP mungkin sudah dimapping ke lab lain
 
 Error saat seed?
-  → Jalankan: mongosh sata --eval "db.lab_configs.drop();"
+  → Jalankan: mongosh msda --eval "db.lab_configs.drop();"
   → Jalankan ulang: npm run seed:labs
 
 Mobile menu tidak muncul?

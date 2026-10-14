@@ -6,7 +6,7 @@
 import { MongoClient } from "mongodb";
 
 const MONGO_URI = process.env.MONGODB_URI || "mongodb://localhost:27017";
-const MONGO_DB = process.env.MONGODB_DB || "sata";
+const MONGO_DB = process.env.MONGODB_DB || "msda";
 
 const ACCESS_POINTS = [
   { ap_ip: "192.168.10.1", ap_name: "Lab Komputer 1" },

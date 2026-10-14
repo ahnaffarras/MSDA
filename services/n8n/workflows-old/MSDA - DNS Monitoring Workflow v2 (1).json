@@ -1,0 +1,645 @@
+{
+  "name": "MSDA - DNS Monitoring Workflow v2",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "dns-scan-webhook",
+        "options": {}
+      },
+      "id": "3730f72e-eb7f-4372-9ebb-b626b8bc85ed",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -1424,
+        160
+      ],
+      "webhookId": "493fad5e-b796-4160-ae8e-686fbfa724af"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "={{ Array.isArray($json.body) ? 'body' : '' }}",
+        "options": {}
+      },
+      "id": "f269aabd-d8c5-4c8d-8523-856f37ad6aec",
+      "name": "Split Out (per domain)",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        -1200,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "collection": "dns_info",
+        "options": {
+          "limit": 1
+        },
+        "query": "={{ JSON.stringify({ domain: $json.domain }) }}"
+      },
+      "id": "f261275b-1aa9-4e10-926e-de52c1be4462",
+      "name": "Mongodb: Find document (dns_info)",
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.1,
+      "position": [
+        -960,
+        112
+      ],
+      "credentials": {
+        "mongoDb": {
+          "id": "BUS3Kq0I83Luyfr1",
+          "name": "MongoDB account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "key": "=queue_{{ $('Split Out (per domain)').item.json.timestamp }}_{{ $itemIndex }}",
+        "keyType": "string",
+        "options": {}
+      },
+      "id": "539dff80-f6e8-4747-88a5-ce2ff251de2d",
+      "name": "Redis Get: queue",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        -720,
+        112
+      ],
+      "credentials": {
+        "redis": {
+          "id": "dJXCmOCATurrHw4A",
+          "name": "Redis account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// domain sudah pernah masuk antrian atau belum\nconst redisValue = $input.first().json.propertyName ?? null;\nconst domain = $('Split Out (per domain)').item.json.domain;\nconst timestamp = $('Split Out (per domain)').item.json.timestamp;\n\nreturn [{ json: { domain, timestamp, onQueue: redisValue !== null && redisValue !== undefined } }];"
+      },
+      "id": "a8bf9c35-2452-4290-a669-dfb654854369",
+      "name": "Filter Set as queue (Code - JS)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -480,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.onQueue }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "7c23fdb7-caac-47ac-b866-817bc8f7296b",
+      "name": "If - not on queue",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -240,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "set",
+        "key": "=queue_{{ $json.timestamp }}_{{ $itemIndex }}",
+        "value": "={{ $json.domain }}",
+        "expire": true,
+        "ttl": 1200
+      },
+      "id": "dff0b722-70ee-46e0-814e-d22af6200c4e",
+      "name": "Redis Set: queue",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "credentials": {
+        "redis": {
+          "id": "dJXCmOCATurrHw4A",
+          "name": "Redis account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "collection": "dns_blacklist",
+        "options": {
+          "limit": 1
+        },
+        "query": "={{ JSON.stringify({ domain: $json.domain }) }}"
+      },
+      "id": "0a09f2c0-3df4-43b7-8642-0430756195d7",
+      "name": "Mongodb: Find document (dns_blacklist)",
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        240
+      ],
+      "credentials": {
+        "mongoDb": {
+          "id": "BUS3Kq0I83Luyfr1",
+          "name": "MongoDB account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "key": "=dns_notification_{{ $('If - not on queue').item.json.domain }}",
+        "keyType": "string",
+        "options": {}
+      },
+      "id": "084c6f12-36a0-4af3-8e49-349dedc33120",
+      "name": "Redis Get: dns_notification",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        240,
+        240
+      ],
+      "credentials": {
+        "redis": {
+          "id": "dJXCmOCATurrHw4A",
+          "name": "Redis account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $('Split Out (per domain)').item.json;\nconst domain = item.domain;\nconst client_ip = item.client_ip;\nconst ap_name = item.ap_name;\nconst ap_ip = item.ap_ip;\nconst query_type = item.query_type;\n\nconst blacklistItems = $('Mongodb: Find document (dns_blacklist)').all();\nconst inBlacklist = blacklistItems.length > 0 && blacklistItems[0].json && blacklistItems[0].json._id;\nconst blacklistDoc = inBlacklist ? blacklistItems[0].json : null;\n\nconst alreadyNotified = $input.first().json.propertyName !== undefined && $input.first().json.propertyName !== null;\n\nreturn [{\n  json: {\n    domain,\n    client_ip,\n    ap_name,\n    ap_ip,\n    query_type,\n    group: blacklistDoc ? blacklistDoc.group : null,\n    type: blacklistDoc ? blacklistDoc.type : null,\n    detected: !!inBlacklist && !alreadyNotified,\n    detail: blacklistDoc\n  }\n}];"
+      },
+      "id": "c8c3842a-b723-4b4c-81be-98ef88fc2815",
+      "name": "Filter (Code - JS)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "c2",
+              "leftValue": "={{ $json.detected }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "0c990437-3063-4a1a-9978-38d4fc822043",
+      "name": "If - Detection DNS",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        720,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://YOUR-THIRD-PARTY-ENDPOINT.example.com/webhook",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "=={{ JSON.stringify({\n  type: \"blacklist_alert\",\n  domain: $json.domain,\n  group: $json.group,\n  client_ip: $json.client_ip,\n  ap_info: { label: $json.ap_name, ip: $json.ap_ip },\n  timestamp: new Date().toISOString()\n}) }}",
+        "options": {}
+      },
+      "id": "36b059cb-fe79-4e77-8184-880145a33d15",
+      "name": "Third Party Webhook",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        992,
+        -32
+      ]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "mode": "name",
+          "value": "laporan-msda"
+        },
+        "text": "==:warning: *Blacklist Alert*\nClient `{{ $json.client_ip }}` mengakses domain {{ $json.type }} `{{ $json.domain }}`\nGroup: {{ $json.group }} | AP: {{ $json.ap_name }}",
+        "otherOptions": {}
+      },
+      "id": "4fefc139-2830-40a2-a569-30257638a3fb",
+      "name": "Send To Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        992,
+        160
+      ],
+      "webhookId": "98bd41e2-2f4a-4c72-8952-76884972e5f2",
+      "credentials": {
+        "slackApi": {
+          "id": "Td2WweGBBAXVPUZF",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "set",
+        "key": "=dns_notification_{{ $json.domain }}",
+        "value": "true",
+        "expire": true
+      },
+      "id": "5d20071c-b15d-46b2-b01e-c156077f234d",
+      "name": "Redis Set: dns_notification",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        992,
+        336
+      ],
+      "credentials": {
+        "redis": {
+          "id": "dJXCmOCATurrHw4A",
+          "name": "Redis account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "collection": "client_access_dns",
+        "options": {}
+      },
+      "id": "0effc834-838d-468b-8b11-5e8065b818f4",
+      "name": "Mongodb Insert: ip_access_dns",
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.1,
+      "position": [
+        1008,
+        544
+      ],
+      "credentials": {
+        "mongoDb": {
+          "id": "BUS3Kq0I83Luyfr1",
+          "name": "MongoDB account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 20
+            }
+          ]
+        }
+      },
+      "id": "951b021a-875b-445a-bb3d-b3a94ce03693",
+      "name": "Cron (7 / 20 menit)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1424,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "keys",
+        "keyPattern": "queue_*"
+      },
+      "id": "39557c94-41b3-4dfc-b9a1-319f6c94aaad",
+      "name": "Redis: queue",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        -1168,
+        608
+      ],
+      "credentials": {
+        "redis": {
+          "id": "dJXCmOCATurrHw4A",
+          "name": "Redis account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "   https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googlePalmApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  contents: [\n    {\n      parts: [\n        {\n          text: \"Analisa domain berikut dari antrian MSDA: \" + JSON.stringify($json) + \". Untuk SETIAP domain, hasilkan data terstruktur lengkap berdasarkan pengetahuan umum kamu tentang domain tersebut (kategori, perusahaan pemilik, dsb). Balas HANYA dengan JSON array valid tanpa teks tambahan, markdown, atau penjelasan apapun. Format PERSIS seperti ini untuk setiap domain: [{\\\"domain\\\": \\\"contoh.com\\\", \\\"group\\\": \\\"Nama Grup\\\", \\\"type\\\": \\\"social_media\\\", \\\"info_app\\\": {\\\"platform\\\": [\\\"mobile\\\", \\\"web\\\"], \\\"company_responsible\\\": \\\"Nama Perusahaan\\\", \\\"owner\\\": \\\"Nama Pemilik\\\"}, \\\"ptr_hostname\\\": \\\"hostname.example.net\\\", \\\"host_isp\\\": {\\\"city\\\": \\\"Jakarta\\\", \\\"region\\\": \\\"ID\\\", \\\"org\\\": \\\"Nama ISP\\\", \\\"asn\\\": \\\"AS12345\\\"}, \\\"ip_scan\\\": [{\\\"ip\\\": \\\"1.2.3.4\\\", \\\"type\\\": \\\"A\\\", \\\"geo\\\": \\\"Jakarta, ID\\\"}]}]. Field type harus salah satu dari: social_media, streaming, gaming, gambling, adult, cloud, cdn, educational, other. Kalau info tidak diketahui pasti, isi dengan estimasi masuk akal, jangan kosongkan field.\"\n        }\n      ]\n    }\n  ]\n}) }}",
+        "options": {}
+      },
+      "id": "669117c7-1c6f-457f-94ba-be7ede995f8b",
+      "name": "AI Analyzer",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -896,
+        608
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "gPQptXwWqStciHht",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// parse jawaban Gemini (harus JSON array) jadi item terpisah per domain\nconst text = $json.candidates[0].content.parts[0].text;\nconst cleaned = text.replace(/```json|```/g, '').trim();\nlet parsed = [];\ntry { parsed = JSON.parse(cleaned); } catch (e) { parsed = []; }\nreturn parsed.map(p => ({ json: p }));"
+      },
+      "id": "2c5f23ea-a064-4767-8f1b-77ab1815adeb",
+      "name": "Parse AI Result (Code - JS)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -656,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "collection": "dns_info",
+        "options": {}
+      },
+      "id": "a1fdfd74-4db1-4d1f-a09f-1afdbb059fb5",
+      "name": "Mongodb: Insert (dns_info)",
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.1,
+      "position": [
+        -416,
+        528
+      ],
+      "credentials": {
+        "mongoDb": {
+          "id": "BUS3Kq0I83Luyfr1",
+          "name": "MongoDB account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "key": "=queue_{{ $json.domain }}"
+      },
+      "id": "7cd6ecbf-ffad-455a-95f5-382fb7dbff33",
+      "name": "Redis del: queue",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        -416,
+        688
+      ],
+      "credentials": {
+        "redis": {
+          "id": "dJXCmOCATurrHw4A",
+          "name": "Redis account 2"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Split Out (per domain)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out (per domain)": {
+      "main": [
+        [
+          {
+            "node": "Mongodb: Find document (dns_info)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mongodb: Find document (dns_info)": {
+      "main": [
+        [
+          {
+            "node": "Redis Get: queue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Redis Get: queue": {
+      "main": [
+        [
+          {
+            "node": "Filter Set as queue (Code - JS)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Set as queue (Code - JS)": {
+      "main": [
+        [
+          {
+            "node": "If - not on queue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If - not on queue": {
+      "main": [
+        [
+          {
+            "node": "Redis Set: queue",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mongodb: Find document (dns_blacklist)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mongodb: Find document (dns_blacklist)": {
+      "main": [
+        [
+          {
+            "node": "Redis Get: dns_notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Redis Get: dns_notification": {
+      "main": [
+        [
+          {
+            "node": "Filter (Code - JS)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter (Code - JS)": {
+      "main": [
+        [
+          {
+            "node": "If - Detection DNS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If - Detection DNS": {
+      "main": [
+        [
+          {
+            "node": "Third Party Webhook",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send To Slack",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Redis Set: dns_notification",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Mongodb Insert: ip_access_dns",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cron (7 / 20 menit)": {
+      "main": [
+        [
+          {
+            "node": "Redis: queue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Redis: queue": {
+      "main": [
+        [
+          {
+            "node": "AI Analyzer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Analyzer": {
+      "main": [
+        [
+          {
+            "node": "Parse AI Result (Code - JS)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse AI Result (Code - JS)": {
+      "main": [
+        [
+          {
+            "node": "Mongodb: Insert (dns_info)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Redis del: queue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "a2ec7ec9-d6ea-43ba-8ad8-1d36362dcff7",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "ed1757c4e7e417b44a60034ee9d504bfe403f7327b166ad8c3ed438a7afe79de"
+  },
+  "nodeGroups": [],
+  "id": "eipj75gYmdL3JF53",
+  "tags": []
+}

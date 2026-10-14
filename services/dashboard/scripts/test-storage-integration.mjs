@@ -2,9 +2,9 @@
  * Tes integrasi OPSIONAL untuk Storage & Cleanup terhadap MongoDB sungguhan.
  *
  * Aman dijalankan di server yang sama dengan data asli: semua data uji ditaruh di
- * database sementara `satatest_<waktu>` yang dihapus di akhir. Database `sata` tidak disentuh.
+ * database sementara `msdatest_<waktu>` yang dihapus di akhir. Database `msda` tidak disentuh.
  *
- *   TEST_MONGODB_URI="mongodb://sata:sata123@localhost:27017/?authSource=admin" \
+ *   TEST_MONGODB_URI="mongodb://msda:msda123@localhost:27017/?authSource=admin" \
  *     npx tsx --tsconfig tsconfig.json scripts/test-storage-integration.mjs
  *
  * (dari folder services/dashboard; `tsx` diunduh otomatis oleh npx)
@@ -23,9 +23,9 @@ const ymd = (d) => new Date(Date.now() + 7 * 3600e3 - d * DAY_MS).toISOString().
 
 async function main() {
   const uri = process.env.TEST_MONGODB_URI
-  if (!uri) { console.error('Set TEST_MONGODB_URI (mis. mongodb://user:pass@localhost:27017/?authSource=admin). Tes memakai database sementara satatest_<waktu> dan menghapusnya di akhir; database "sata" tidak disentuh.'); process.exit(2) }
+  if (!uri) { console.error('Set TEST_MONGODB_URI (mis. mongodb://user:pass@localhost:27017/?authSource=admin). Tes memakai database sementara msdatest_<waktu> dan menghapusnya di akhir; database "msda" tidak disentuh.'); process.exit(2) }
   const client = await new MongoClient(uri).connect()
-  const db = client.db('satatest_' + Date.now())
+  const db = client.db('msdatest_' + Date.now())
   console.log('db', db.databaseName)
 
   // ── seed ip_access_dns (campuran tipe) ──

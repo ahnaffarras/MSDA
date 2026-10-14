@@ -64,7 +64,7 @@
 
 ---
 
-## Workflow 1: DNS Ingestion Pipeline (`sata-dns-ingestion.json`)
+## Workflow 1: DNS Ingestion Pipeline (`msda-dns-ingestion.json`)
 
 Pipeline real-time untuk memproses DNS query dari MikroTik.
 
@@ -72,7 +72,7 @@ Pipeline real-time untuk memproses DNS query dari MikroTik.
 
 | Trigger | Fungsi | Endpoint |
 |---------|--------|----------|
-| **Webhook** | Menerima batch DNS query dari vector.dev | `POST /webhook/sata-dns` |
+| **Webhook** | Menerima batch DNS query dari vector.dev | `POST /webhook/msda-dns` |
 
 ### Flow Lengkap
 
@@ -80,8 +80,8 @@ Pipeline real-time untuk memproses DNS query dari MikroTik.
 ┌──────────────────────────────────────────────────────────────────┐
 │  FASE 1: WEBHOOK TRIGGER                                         │
 │                                                                  │
-│  vector.dev ──POST──→ n8n /webhook/sata-dns                      │
-│  Header: X-SATA-Token: <token>                                   │
+│  vector.dev ──POST──→ n8n /webhook/msda-dns                      │
+│  Header: X-MSDA-Token: <token>                                   │
 │  Body: { body: [ { timestamp, ap_ip, client_ip, domain, ... } ] }│
 └──────────────────────────────────────────────────────────────────┘
                               ↓
@@ -89,7 +89,7 @@ Pipeline real-time untuk memproses DNS query dari MikroTik.
 │  FASE 2: SPLIT + VALIDASI + KLASIFIKASI                          │
 │                                                                  │
 │  1. Split Batch: Memecah array menjadi item individual           │
-│  2. Validasi Token: Cek X-SATA-Token header                      │
+│  2. Validasi Token: Cek X-MSDA-Token header                      │
 │     - VALID   → Lanjut                                           │
 │     - INVALID → Response 401 Unauthorized                        │
 │  3. Klasifikasi Domain: Menambahkan risk_level                   │
@@ -143,7 +143,7 @@ Pipeline real-time untuk memproses DNS query dari MikroTik.
 |---|------|------|--------|
 | 1 | `Webhook: Terima Batch DNS` | Webhook | Menerima POST dari vector.dev |
 | 2 | `Split Batch` | SplitOut | Memecah array `body` menjadi item individual |
-| 3 | `Validasi Token` | IF | Cek X-SATA-Token header |
+| 3 | `Validasi Token` | IF | Cek X-MSDA-Token header |
 | 4 | `Tolak: 401` | Respond | Response 401 jika token invalid |
 | 5 | `Klasifikasi Domain` | Code (JS) | Tambahkan `risk_level` berdasarkan domain keywords |
 | 6 | `Rate Counter` | Redis INCR | Increment counter `rate:{client_ip}` |
@@ -169,7 +169,7 @@ Pipeline real-time untuk memproses DNS query dari MikroTik.
 
 ---
 
-## Workflow 2: Daily AI Report (`sata-daily-report.json`)
+## Workflow 2: Daily AI Report (`msda-daily-report.json`)
 
 Pipeline harian untuk generate laporan DNS traffic menggunakan AI.
 
@@ -233,7 +233,7 @@ Pipeline harian untuk generate laporan DNS traffic menggunakan AI.
 │             ap_count, raw_data                                   │
 │                                                                  │
 │  2. Slack Kirim Laporan:                                         │
-│     "Laporan Harian SATA — {date_label}"                         │
+│     "Laporan Harian MSDA — {date_label}"                         │
 │     + report_text + metadata                                     │
 └──────────────────────────────────────────────────────────────────┘
 ```

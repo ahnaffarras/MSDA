@@ -1,6 +1,6 @@
 # Structure
 
-> Struktur data lengkap seluruh komponen SATA — termasuk field, tipe, keterangan, contoh nilai, dan hubungan antar data.
+> Struktur data lengkap seluruh komponen MSDA — termasuk field, tipe, keterangan, contoh nilai, dan hubungan antar data.
 > **Terakhir diperbarui:** 2026-08-27 — disesuaikan dengan implementasi aktual.
 
 ---
@@ -61,8 +61,8 @@ Log real-time DNS query dari seluruh access point. **Ditulis oleh n8n** setiap k
 }
 ```
 
-**Ditulis oleh:** n8n `sata-dns-ingestion.json` → MongoDB Insert (node: Simpan ke MongoDB)
-**Dibaca oleh:** n8n `sata-daily-report.json` → MongoDB Aggregate (Ambil Data Harian), Go backend → Dashboard API
+**Ditulis oleh:** n8n `msda-dns-ingestion.json` → MongoDB Insert (node: Simpan ke MongoDB)
+**Dibaca oleh:** n8n `msda-daily-report.json` → MongoDB Aggregate (Ambil Data Harian), Go backend → Dashboard API
 
 ---
 
@@ -274,7 +274,7 @@ Laporan harian hasil analisis AI (Gemini). **Ditulis oleh n8n** setiap hari jam 
 }
 ```
 
-**Ditulis oleh:** n8n `sata-daily-report.json` → MongoDB Insert (Arsip ke MongoDB)
+**Ditulis oleh:** n8n `msda-daily-report.json` → MongoDB Insert (Arsip ke MongoDB)
 **Dibaca oleh:** Go backend → Reports API, Dashboard Reports page
 
 ---
@@ -364,7 +364,7 @@ Batch DNS query dari vector.dev (MikroTik) dikirim ke n8n via HTTP POST. **Paylo
 | `body[].ap_name` | String | Yes | Nama/label AP (readable) | `"Lab Komputer 1"` |
 | `body[].client_ip` | String | Yes | IP address client | `"192.168.10.45"` |
 | `body[].domain` | String | Yes | Domain yang di-query | `"youtube.com"` |
-| `headers.x-sata-token` | String | Yes | Token autentikasi | `"your-webhook-token"` |
+| `headers.x-msda-token` | String | Yes | Token autentikasi | `"your-webhook-token"` |
 
 **Contoh Payload:**
 ```json
@@ -388,13 +388,13 @@ Batch DNS query dari vector.dev (MikroTik) dikirim ke n8n via HTTP POST. **Paylo
     }
   ],
   "headers": {
-    "x-sata-token": "your-webhook-token"
+    "x-msda-token": "your-webhook-token"
   }
 }
 ```
 
 **Dikirim oleh:** vector.dev (collect dari MikroTik)
-**Diterima oleh:** n8n Webhook `POST /webhook/sata-dns`
+**Diterima oleh:** n8n Webhook `POST /webhook/msda-dns`
 
 ---
 
@@ -449,20 +449,20 @@ MikroTik Router
   ↓ (DNS query logs)
 vector.dev
   ↓ (HTTP POST batch ke n8n)
-n8n (sata-dns-ingestion.json)
+n8n (msda-dns-ingestion.json)
   ↓
 ┌─────────────────────────────────────────────────────────────────────┐
 │                                                                     │
 │  FASE 1: Webhook Trigger                                            │
 │  ┌─────────────────────────────────────┐                            │
-│  │ POST /webhook/sata-dns              │                            │
+│  │ POST /webhook/msda-dns              │                            │
 │  │ Payload: { body: [...], headers }   │                            │
 │  └──────────────┬──────────────────────┘                            │
 │                 ↓                                                    │
 │  FASE 2: Split + Validasi Token + Klasifikasi                       │
 │  ┌─────────────────────────────────────┐                            │
 │  │ Split Batch (per item)              │                            │
-│  │ Validasi X-SATA-Token header        │                            │
+│  │ Validasi X-MSDA-Token header        │                            │
 │  │ Klasifikasi Domain (risk_level)     │                            │
 │  │ Rate Counter: INCR + EXPIRE 60s     │→── Redis rate:{client_ip}  │
 │  └──────────────┬──────────────────────┘                            │
@@ -493,7 +493,7 @@ n8n (sata-dns-ingestion.json)
 │                                                                     │
 └─────────────────────────────────────────────────────────────────────┘
 
-n8n (sata-daily-report.json)
+n8n (msda-daily-report.json)
   ↓
 ┌─────────────────────────────────────────────────────────────────────┐
 │                                                                     │
@@ -524,7 +524,7 @@ n8n (sata-daily-report.json)
 │                                                                     │
 └─────────────────────────────────────────────────────────────────────┘
 
-Go Backend (sata-ai-backend)
+Go Backend (msda-backend)
   ↓
 ┌─────────────────────────────────────────────────────────────────────┐
 │                                                                     │

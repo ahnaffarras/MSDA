@@ -23,7 +23,7 @@ export const BLACKLIST_TYPES: BlacklistTypeInfo[] = [
   { value: 'social_media', label: 'Social media', group: 'Media Sosial' },
   { value: 'streaming', label: 'Streaming', group: 'Streaming' },
   { value: 'gaming', label: 'Gaming', group: 'Game' },
-  { value: 'testing', label: 'Testing', group: 'Uji Coba SATA' },
+  { value: 'testing', label: 'Testing', group: 'Uji Coba MSDA' },
   { value: 'custom', label: 'Other', group: 'Kustom' },
 ]
 

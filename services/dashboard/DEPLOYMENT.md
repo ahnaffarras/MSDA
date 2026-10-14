@@ -15,17 +15,17 @@
 
 ```bash
 # Backup MongoDB
-mongodump --uri="mongodb://localhost:27017/sata" --out=/backup/sata-$(date +%Y%m%d)
+mongodump --uri="mongodb://localhost:27017/msda" --out=/backup/msda-$(date +%Y%m%d)
 
 # Backup application code (if not using git)
-cd /home/turgocloud/sata-ai-prod/sata-ai/services
+cd /home/turgocloud/msda-prod/msda/services
 tar -czf dashboard-backup-$(date +%Y%m%d).tar.gz dashboard/
 ```
 
 ### Step 2: Install Dependencies
 
 ```bash
-cd /home/turgocloud/sata-ai-prod/sata-ai/services/dashboard
+cd /home/turgocloud/msda-prod/msda/services/dashboard
 
 # If tsx is not installed
 npm install --save-dev tsx
@@ -106,7 +106,7 @@ npm run start
 ### Step 7: Create MongoDB Indexes (Performance)
 
 ```bash
-mongosh sata << 'EOF'
+mongosh msda << 'EOF'
 // Lab configs indexes
 db.lab_configs.createIndex({ order: 1 });
 db.lab_configs.createIndex({ is_active: 1 });
@@ -181,11 +181,11 @@ If deployment fails or critical bugs found:
 pm2 stop dashboard
 
 # Restore backup code
-cd /home/turgocloud/sata-ai-prod/sata-ai/services
+cd /home/turgocloud/msda-prod/msda/services
 tar -xzf dashboard-backup-YYYYMMDD.tar.gz
 
 # Restore MongoDB (if needed)
-mongorestore --uri="mongodb://localhost:27017/sata" /backup/sata-YYYYMMDD/sata
+mongorestore --uri="mongodb://localhost:27017/msda" /backup/msda-YYYYMMDD/msda
 
 # Rebuild and restart
 cd dashboard
@@ -199,7 +199,7 @@ If database changes are fine but code has issues:
 
 ```bash
 # Just restore code
-cd /home/turgocloud/sata-ai-prod/sata-ai/services
+cd /home/turgocloud/msda-prod/msda/services
 rm -rf dashboard
 tar -xzf dashboard-backup-YYYYMMDD.tar.gz
 cd dashboard
@@ -227,7 +227,7 @@ sudo tail -f /var/log/nginx/error.log
 
 ```bash
 # Check MongoDB query performance
-mongosh sata << 'EOF'
+mongosh msda << 'EOF'
 db.lab_configs.explain("executionStats").find({}).sort({ order: 1 })
 db.ip_mappings.explain("executionStats").find({ lab_id: "some_id" })
 EOF
@@ -247,7 +247,7 @@ time_total:  %{time_total}\n
 
 **Solution**: This is normal if already seeded. To re-seed:
 ```bash
-mongosh sata --eval "db.lab_configs.drop(); db.ip_mappings.drop();"
+mongosh msda --eval "db.lab_configs.drop(); db.ip_mappings.drop();"
 npm run seed:labs
 ```
 
@@ -256,7 +256,7 @@ npm run seed:labs
 **Solution**: Set environment variable:
 ```bash
 export MONGODB_URI="mongodb://localhost:27017"
-export MONGODB_DB="sata"
+export MONGODB_DB="msda"
 # Or add to .env.local file
 ```
 
@@ -292,7 +292,7 @@ export MONGODB_DB="sata"
    ```bash
    # .env.production
    MONGODB_URI=mongodb://username:password@localhost:27017
-   MONGODB_DB=sata
+   MONGODB_DB=msda
    NODE_ENV=production
    ```
 
@@ -320,13 +320,13 @@ export MONGODB_DB="sata"
 mongosh admin
 use admin
 db.createUser({
-  user: "sata_admin",
+  user: "msda_admin",
   pwd: "strong_password",
-  roles: [ { role: "readWrite", db: "sata" } ]
+  roles: [ { role: "readWrite", db: "msda" } ]
 })
 
 # Update connection string
-MONGODB_URI="mongodb://sata_admin:strong_password@localhost:27017/sata?authSource=admin"
+MONGODB_URI="mongodb://msda_admin:strong_password@localhost:27017/msda?authSource=admin"
 ```
 
 ## Maintenance

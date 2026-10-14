@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This file defines the working rules for AI assistants contributing to the SATA project. It is the operational guide for how the project should be implemented, documented, and evolved from initial scaffolding to MVP and beyond.
+This file defines the working rules for AI assistants contributing to the MSDA project. It is the operational guide for how the project should be implemented, documented, and evolved from initial scaffolding to MVP and beyond.
 
 ## Core Principles
 
@@ -23,7 +23,7 @@ This file defines the working rules for AI assistants contributing to the SATA p
   - infrastructure for deployment and runtime setup
   - services for application logic and workflow automation
   - docs for architectural and project documentation
-- Keep changes aligned with the SATA roadmap: foundation, automation, analytics, and monitoring.
+- Keep changes aligned with the MSDA roadmap: foundation, automation, analytics, and monitoring.
 - When implementing features, prefer a simple and understandable approach that can scale into MVP and production.
 - If a change affects multiple layers, update the relevant documentation and configuration together.
 

@@ -19,7 +19,7 @@ RUN npm ci
 COPY . .
 
 # Dummy env agar build tidak error karena MONGODB_URI belum di-set
-ENV MONGODB_URI=mongodb://placeholder:27017/sata
+ENV MONGODB_URI=mongodb://placeholder:27017/msda
 ENV NEXT_PUBLIC_BASE_URL=http://localhost:3000
 
 # Tujuan proxy /api-proxy/* (rewrites di next.config.ts) DIKUNCI saat `next build`,

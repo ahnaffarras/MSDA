@@ -18,9 +18,9 @@ Dokumen ini berisi langkah-langkah **End-to-End Verification** untuk memastikan:
 ## Tahap 1: Verifikasi Mikrotik (Kirim Syslog)
 
 ### 1.1 Pastikan `:local syslogServerIP` Sudah Benar
-Buka terminal SSH/Winbox Mikrotik dan cek apakah action `sata-remote-syslog` mengarah ke IP Docker Host:
+Buka terminal SSH/Winbox Mikrotik dan cek apakah action `msda-remote-syslog` mengarah ke IP Docker Host:
 ```routeros
-/system logging action print where name="sata-remote-syslog"
+/system logging action print where name="msda-remote-syslog"
 ```
 *Pastikan parameter `remote` berisi IP Komputer/Server Docker kamu (bukan `127.0.0.1` atau `localhost`).*
 
@@ -45,7 +45,7 @@ Picu pencarian DNS dari terminal Mikrotik untuk menghasilkan log:
 Masuk ke direktori Docker di server/laptop tempat Docker berada:
 
 ```bash
-cd sata-ai/infrastructure/docker
+cd msda/infrastructure/docker
 
 # 1. Jalankan container vector (atau seluruh stack)
 docker compose up -d vector
@@ -53,7 +53,7 @@ docker compose up -d vector
 # 2. Cek status container
 docker compose ps
 ```
-**Ekspektasi**: Status `sata-vector` adalah **Up (healthy/running)** dan port `514/udp` terbuka.
+**Ekspektasi**: Status `msda-vector` adalah **Up (healthy/running)** dan port `514/udp` terbuka.
 
 ---
 
@@ -64,7 +64,7 @@ Karena Vector sudah dikonfigurasi dengan **Console Sink** (`[sinks.debug_console
 ### 3.1 Amati Live Stream Log Vector
 Jalankan perintah ini di terminal server Docker:
 ```bash
-docker logs -f sata-vector
+docker logs -f msda-vector
 ```
 
 ### 3.2 Lakukan Test Query Lagi dari Klien / Mikrotik
@@ -74,7 +74,7 @@ nslookup wikipedia.org
 ```
 
 ### 3.3 Verifikasi Output JSON di Vector Console
-**Ekspektasi Output di Terminal Docker (`docker logs -f sata-vector`)**:
+**Ekspektasi Output di Terminal Docker (`docker logs -f msda-vector`)**:
 
 ```json
 {"ap_ip":"192.168.10.1","ap_name":"192.168.10.1","client_ip":"192.168.10.45","domain":"wikipedia.org","source_type":"mikrotik_dns","timestamp":"2026-08-07T10:40:00.123456789Z"}
@@ -98,6 +98,6 @@ Bandingkan output JSON yang keluar di console dengan checklist berikut:
 
 | Masalah / Gejala | Kemungkinan Penyebab | Cara Memperbaiki |
 | :--- | :--- | :--- |
-| `docker logs -f sata-vector` **kosong** saat traffic dibuat | 1. IP Target Syslog di Mikrotik salah.<br>2. Firewall OS (Windows Firewall / `ufw`) memblokir Port 514 UDP. | 1. Cek `syslogServerIP` di Mikrotik.<br>2. Buka inbound rule Port `514 UDP` di Firewall Host. |
-| Log masuk tapi ada error **Parse Failed** | Format log RouterOS Mikrotik berbeda dengan versi standar regex. | Catat log mentah dari Mikrotik, lalu sesuaikan regex di `sata-ai/infrastructure/log-parser/vector.toml`. |
+| `docker logs -f msda-vector` **kosong** saat traffic dibuat | 1. IP Target Syslog di Mikrotik salah.<br>2. Firewall OS (Windows Firewall / `ufw`) memblokir Port 514 UDP. | 1. Cek `syslogServerIP` di Mikrotik.<br>2. Buka inbound rule Port `514 UDP` di Firewall Host. |
+| Log masuk tapi ada error **Parse Failed** | Format log RouterOS Mikrotik berbeda dengan versi standar regex. | Catat log mentah dari Mikrotik, lalu sesuaikan regex di `msda/infrastructure/log-parser/vector.toml`. |
 | Vector error **Connection Refused** ke n8n | n8n belum dinyalakan (namun console debug Vector tetap berjalan). | Jalankan n8n via `docker compose up -d`. |

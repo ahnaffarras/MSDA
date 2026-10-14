@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /*
- * SATA — konsol analisis lalu lintas jaringan.
+ * MSDA — konsol analisis lalu lintas DNS jaringan.
  * Tema modern terang/gelap: BIRU sebagai warna utama (tombol, tautan, status
  * aktif, seri data "query"), HIJAU sebagai warna pendamping (indikator "live",
  * beban per access point, status wajar, penanda aktif di sidebar).

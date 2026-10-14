@@ -173,7 +173,7 @@ If you have existing deployment:
 - API documentation in guide files
 
 ### 🙏 Acknowledgments
-Thanks to the SATA team for requirements and feedback on flexible lab configuration.
+Thanks to the MSDA team for requirements and feedback on flexible lab configuration.
 
 ---
 

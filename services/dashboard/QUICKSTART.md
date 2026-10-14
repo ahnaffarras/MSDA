@@ -2,7 +2,7 @@
 
 ## Apa yang Berubah?
 
-Dashboard SATA sekarang **100% fleksibel**:
+Dashboard MSDA sekarang **100% fleksibel**:
 
 ✅ **Nama lab bebas** - tidak harus "Lab 1, 2, 3"  
 ✅ **IP mapping manual** - tentukan sendiri IP mana yang jadi PC-01, PC-02, dst  
@@ -16,7 +16,7 @@ Dashboard SATA sekarang **100% fleksibel**:
 Jika ingin setup cepat dengan 3 lab default:
 
 ```bash
-cd /home/turgocloud/sata-ai-prod/sata-ai/services/dashboard
+cd services/dashboard
 
 # Install dependencies (jika belum)
 npm install
@@ -114,7 +114,7 @@ Pastikan:
 Jika sudah ada data, hapus dulu:
 
 ```bash
-mongosh sata --eval "db.lab_configs.drop(); db.ip_mappings.drop();"
+mongosh msda --eval "db.lab_configs.drop(); db.ip_mappings.drop();"
 npm run seed:labs
 ```
 

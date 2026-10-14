@@ -2,7 +2,7 @@
 
 ## Project Study Case
 
-Smart AP Traffic Analyzer (SATA) is a network intelligence platform designed to transform MikroTik DNS traffic data into actionable insights. The core challenge is to move from raw network logs to an automated analytics workflow that can support both operational monitoring and business-facing reporting.
+MikroTik Smart DNS Analytics (MSDA) is a network intelligence platform designed to transform MikroTik DNS traffic data into actionable insights. The core challenge is to move from raw network logs to an automated analytics workflow that can support both operational monitoring and business-facing reporting.
 
 The system is built around a simple but powerful idea: collect DNS-related events from access points, transform them into structured data, analyze them with AI, and deliver results to stakeholders through Slack and a web dashboard.
 
@@ -17,7 +17,7 @@ The project aims to solve the following needs:
 
 ## Product Vision
 
-SATA should evolve from an initial technical prototype into an MVP product that can:
+MSDA should evolve from an initial technical prototype into an MVP product that can:
 - ingest traffic events continuously
 - store and analyze data over time
 - present dashboards and summaries for decision makers

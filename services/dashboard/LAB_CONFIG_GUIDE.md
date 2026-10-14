@@ -1,6 +1,6 @@
 # Lab Configuration Guide
 
-Dashboard SATA sekarang mendukung **konfigurasi lab yang fleksibel**. Anda dapat:
+Dashboard MSDA sekarang mendukung **konfigurasi lab yang fleksibel**. Anda dapat:
 
 - ✨ Membuat lab baru dengan nama custom
 - 🔄 Mengubah nama lab yang sudah ada
@@ -15,7 +15,7 @@ Dashboard SATA sekarang mendukung **konfigurasi lab yang fleksibel**. Anda dapat
 Jika Anda ingin menggunakan konfigurasi default (3 lab dengan 36 PC masing-masing):
 
 ```bash
-cd /home/turgocloud/sata-ai-prod/sata-ai/services/dashboard
+cd services/dashboard
 npx tsx scripts/seed-labs.ts
 ```
 

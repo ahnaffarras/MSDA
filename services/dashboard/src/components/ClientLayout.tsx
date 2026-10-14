@@ -60,7 +60,7 @@ function Shell({ children }: { children: ReactNode }) {
             onClick={() => setMenuOpen(true)}
             aria-label="Open menu"
             aria-expanded={menuOpen}
-            aria-controls="sata-sidebar"
+            aria-controls="msda-sidebar"
             className="rail-link flex items-center justify-center w-10 h-10 rounded-lg"
           >
             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -68,7 +68,7 @@ function Shell({ children }: { children: ReactNode }) {
             </svg>
           </button>
           <BrandMark className="w-8 h-8" />
-          <span className="font-bold tracking-tight text-lg" style={{ color: 'var(--rail-strong)' }}>SATA</span>
+          <span className="font-bold tracking-tight text-lg" style={{ color: 'var(--rail-strong)' }}>MSDA</span>
           <button
             type="button"
             onClick={toggleTheme}

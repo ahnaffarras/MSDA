@@ -240,7 +240,7 @@ services/dashboard/
 
 1. **Install dependencies** (if tsx not installed):
    ```bash
-   cd /home/turgocloud/sata-ai-prod/sata-ai/services/dashboard
+   cd /home/turgocloud/msda-prod/msda/services/dashboard
    npm install
    ```
 
@@ -273,7 +273,7 @@ For optimal performance, create these indexes:
 
 ```javascript
 // In MongoDB shell
-use sata
+use msda
 
 // Lab configs
 db.lab_configs.createIndex({ order: 1 })

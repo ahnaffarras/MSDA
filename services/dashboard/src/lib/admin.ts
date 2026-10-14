@@ -4,7 +4,7 @@ import { authenticate, type AuthedUser } from '@/lib/auth'
 /**
  * Penjaga untuk aksi yang mengubah data (blocklist, storage, manajemen pengguna).
  *
- * Sebelumnya memakai satu token bersama (SATA_ADMIN_TOKEN). Sekarang memakai login:
+ * Sebelumnya memakai satu token bersama (MSDA_ADMIN_TOKEN). Sekarang memakai login:
  * sesi di cookie HttpOnly + peran pengguna di database. Token bersama dihapus karena
  * tidak bisa dibedakan siapa yang bertindak dan tidak bisa dicabut per orang.
  */

@@ -1,7 +1,7 @@
 /**
- * SATA Dashboard — API client
+ * MSDA Dashboard — API client
  *
- * Semua fetch diarahkan ke Go backend API (sata-ai-backend).
+ * Semua fetch diarahkan ke Go backend API (msda-backend).
  * - Server Component / Node.js → NEXT_PUBLIC_API_URL (e.g. http://backend:8080)
  * - Browser                    → /api-proxy/* (Next.js rewrites → Go backend)
  */
@@ -23,7 +23,7 @@ function apiBase(): string {
 
 function getToken(): string {
   if (typeof window !== "undefined") {
-    return localStorage.getItem("sata_token") ?? "";
+    return localStorage.getItem("msda_token") || "";
   }
   return "";
 }
@@ -38,7 +38,7 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, { cache: "no-store", ...options });
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    throw new Error(`[SATA API] ${path} → ${res.status}: ${body}`);
+    throw new Error(`[MSDA API] ${path} → ${res.status}: ${body}`);
   }
   return res.json() as Promise<T>;
 }
@@ -203,19 +203,19 @@ export async function login(username: string, password: string): Promise<{ token
     body: JSON.stringify({ username, password }),
   });
   if (typeof window !== "undefined") {
-    localStorage.setItem("sata_token", res.data.token);
+    localStorage.setItem("msda_token", res.data.token);
   }
   return res.data;
 }
 
 export function logout(): void {
   if (typeof window !== "undefined") {
-    localStorage.removeItem("sata_token");
+    localStorage.removeItem("msda_token");
   }
 }
 
 export function isLoggedIn(): boolean {
-  return typeof window !== "undefined" && !!localStorage.getItem("sata_token");
+  return typeof window !== "undefined" && !!localStorage.getItem("msda_token");
 }
 
 // ─────────────────────────────────────────── Static seat map ─────────────────

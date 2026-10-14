@@ -20,7 +20,7 @@ function allowedHosts(request: NextRequest): Set<string> {
   const hosts = new Set<string>()
   const host = request.headers.get('x-forwarded-host') ?? request.headers.get('host')
   if (host) hosts.add(host.split(',')[0].trim().toLowerCase())
-  for (const h of (process.env.SATA_ALLOWED_ORIGINS ?? '').split(',')) {
+  for (const h of (process.env.MSDA_ALLOWED_ORIGINS ?? '').split(',')) {
     const v = h.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/+$/, '')
     if (v) hosts.add(v)
   }

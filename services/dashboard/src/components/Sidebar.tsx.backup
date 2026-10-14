@@ -51,7 +51,7 @@ export default function Sidebar() {
               </svg>
             </div>
             <div>
-              <h1 className="text-white font-semibold text-lg tracking-tight">SATA</h1>
+              <h1 className="text-white font-semibold text-lg tracking-tight">MSDA</h1>
               <p className="text-[#6b7280] text-xs">Lab Monitor</p>
             </div>
           </div>

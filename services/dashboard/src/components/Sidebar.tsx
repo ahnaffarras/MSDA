@@ -121,7 +121,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
       )}
 
       <aside
-        id="sata-sidebar"
+        id="msda-sidebar"
         aria-label="Main navigation"
         className={`
           rail
@@ -138,12 +138,12 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
           className={`flex items-center h-16 px-4 border-b flex-shrink-0 ${collapsed ? 'lg:justify-center lg:px-0' : ''}`}
           style={{ borderColor: 'var(--rail-line)' }}
         >
-          <Link href="/" onClick={onClose} className="flex items-center gap-3 min-w-0" title="SATA — Dashboard">
+          <Link href="/" onClick={onClose} className="flex items-center gap-3 min-w-0" title="MSDA — Dashboard">
             <BrandMark />
             <span className={`min-w-0 ${hideLabel}`}>
-              <span className="block text-base font-bold leading-tight tracking-tight" style={{ color: 'var(--rail-strong)' }}>SATA</span>
+              <span className="block text-base font-bold leading-tight tracking-tight" style={{ color: 'var(--rail-strong)' }}>MSDA</span>
               <span className="block text-xs leading-tight truncate" style={{ color: 'var(--rail-dim)' }}>
-                Smart AP Traffic Analyzer
+                MikroTik Smart DNS Analytics
               </span>
             </span>
           </Link>

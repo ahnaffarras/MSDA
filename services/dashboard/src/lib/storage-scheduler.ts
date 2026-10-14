@@ -13,7 +13,7 @@ import { getDb } from '@/lib/db'
 import { runSchedulerTick } from '@/lib/storage-service'
 
 declare global {
-  var _sataStorageScheduler: ReturnType<typeof setInterval> | undefined
+  var _msdaStorageScheduler: ReturnType<typeof setInterval> | undefined
 }
 
 const TICK_MS = 60_000
@@ -29,7 +29,7 @@ export function startStorageScheduler(): void {
     return
   }
   // Satu timer per proses, juga saat modul dimuat ulang (HMR di mode dev).
-  if (globalThis._sataStorageScheduler) return
+  if (globalThis._msdaStorageScheduler) return
 
   let running = false
   const tick = async () => {
@@ -45,7 +45,7 @@ export function startStorageScheduler(): void {
   }
 
   const interval = setInterval(() => void tick(), TICK_MS)
-  globalThis._sataStorageScheduler = interval
+  globalThis._msdaStorageScheduler = interval
   interval.unref?.()
   setTimeout(() => void tick(), FIRST_DELAY_MS).unref?.()
   console.log('[storage] scheduler started (checks every 60s)')

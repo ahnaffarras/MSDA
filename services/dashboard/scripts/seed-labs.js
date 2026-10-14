@@ -5,8 +5,8 @@
 
 const { MongoClient } = require("mongodb");
 
-const MONGO_URI = process.env.MONGODB_URI || "mongodb://sata:sata123@localhost:27017/sata?authSource=admin";
-const MONGO_DB = process.env.MONGODB_DB || "sata";
+const MONGO_URI = process.env.MONGODB_URI || "mongodb://msda:msda123@localhost:27017/msda?authSource=admin";
+const MONGO_DB = process.env.MONGODB_DB || "msda";
 
 const ACCESS_POINTS = [
   { ap_ip: "192.168.10.1", ap_name: "Lab Komputer 1" },
@@ -30,7 +30,7 @@ async function seedLabs() {
     if (existingCount > 0) {
       console.log("⚠ Lab configs already exist. Skipping seed.");
       console.log("  To re-seed, drop collections first:");
-      console.log("  mongosh sata --eval 'db.lab_configs.drop(); db.ip_mappings.drop();'");
+      console.log("  mongosh msda --eval 'db.lab_configs.drop(); db.ip_mappings.drop();'");
       return;
     }
 

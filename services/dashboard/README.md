@@ -1,6 +1,6 @@
-# SATA Dashboard
+# MSDA Dashboard
 
-A Next.js dashboard for the Smart AP Traffic Analyzer project.
+A Next.js dashboard for the MikroTik Smart DNS Analytics (MSDA) project.
 
 ## Stack
 - Next.js 16 with the App Router

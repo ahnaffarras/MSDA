@@ -18,7 +18,7 @@ Dokumen ini menjelaskan struktur data, spesifikasi JSON payload, tipe data, cont
    - **Jumlah Event**: Maksimal **100 event** per batch (`batch.max_events = 100`).
    - **Batas Waktu (Timeout)**: Maksimal **10 detik** (`batch.timeout_secs = 10`). Mana pun yang tercapai lebih dulu akan memicu pengiriman HTTP POST.
 3. **Keamanan (Authentication Header)**:
-   Vector menyertakan kustom header `X-SATA-Token` pada setiap request untuk memvalidasi bahwa payload benar-benar berasal dari vector resmi.
+   Vector menyertakan kustom header `X-MSDA-Token` pada setiap request untuk memvalidasi bahwa payload benar-benar berasal dari vector resmi.
 
 ---
 
@@ -86,11 +86,11 @@ Payload HTTP POST Body yang diterima oleh n8n berupa **Array JSON**:
 Setiap payload HTTP POST dari Vector membawa HTTP Headers berikut:
 
 ```http
-POST /webhook/sata-dns HTTP/1.1
+POST /webhook/msda-dns HTTP/1.1
 Host: n8n:5678
 Content-Type: application/json
-X-SATA-Token: changeme-token
+X-MSDA-Token: changeme-token
 User-Agent: Vector/0.38.0
 ```
 
-> 💡 **Rekomendasi di n8n**: Gunakan Node Webhook di n8n dengan opsi *Header Authentication* atau atur *IF Node* untuk menguji apakah `$header["x-sata-token"] == "changeme-token"`.
+> 💡 **Rekomendasi di n8n**: Gunakan Node Webhook di n8n dengan opsi *Header Authentication* atau atur *IF Node* untuk menguji apakah `$header["x-msda-token"] == "changeme-token"`.

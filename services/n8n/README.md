@@ -1,6 +1,6 @@
-# n8n Service — SATA Workflow Automation
+# n8n Service — MSDA Workflow Automation
 
-Folder ini berisi workflow n8n untuk pipeline SATA: dari penerimaan log DNS hingga laporan AI ke Slack.
+Folder ini berisi workflow n8n untuk pipeline MSDA: dari penerimaan log DNS hingga laporan AI ke Slack.
 
 ---
 
@@ -8,20 +8,20 @@ Folder ini berisi workflow n8n untuk pipeline SATA: dari penerimaan log DNS hing
 
 ```
 workflows/
-├── sata-dns-ingestion.json   # Workflow 1: Terima batch DNS dari Vector → MongoDB + alert real-time
-└── sata-daily-report.json    # Workflow 2: Laporan harian AI via Gemini → Slack
+├── msda-dns-ingestion.json   # Workflow 1: Terima batch DNS dari Vector → MongoDB + alert real-time
+└── msda-daily-report.json    # Workflow 2: Laporan harian AI via Gemini → Slack
 ```
 
 ---
 
 ## Workflow 1 — DNS Ingestion Pipeline
 
-**File:** `workflows/sata-dns-ingestion.json`
+**File:** `workflows/msda-dns-ingestion.json`
 
 ```
-Webhook (POST /webhook/sata-dns)
+Webhook (POST /webhook/msda-dns)
   └─► Split Batch (pisah array event)
-        └─► Validasi Token (X-SATA-Token)
+        └─► Validasi Token (X-MSDA-Token)
               ├─► [GAGAL] → 401 Unauthorized
               └─► [OK] → Klasifikasi Domain (flag/watch/safe)
                             └─► Rate Counter (Redis INCR per IP, TTL 60s)
@@ -68,7 +68,7 @@ Webhook (POST /webhook/sata-dns)
 
 ## Workflow 2 — Daily AI Report
 
-**File:** `workflows/sata-daily-report.json`
+**File:** `workflows/msda-daily-report.json`
 
 Berjalan otomatis setiap hari pukul **23:00 WIB** (Senin–Sabtu). Menggunakan **Gemini 2.5 Flash**.
 
@@ -116,8 +116,8 @@ Schedule Trigger (23:00 WIB)
 
 4. Import workflow:
    - Klik menu **⋮** (pojok kiri atas) → **Import from file**
-   - Pilih `workflows/sata-dns-ingestion.json`
-   - Ulangi untuk `workflows/sata-daily-report.json`
+   - Pilih `workflows/msda-dns-ingestion.json`
+   - Ulangi untuk `workflows/msda-daily-report.json`
 
 ---
 
@@ -125,25 +125,25 @@ Schedule Trigger (23:00 WIB)
 
 Setelah import, buka setiap workflow dan buat credentials berikut:
 
-### 1. MongoDB (`SATA MongoDB`)
+### 1. MongoDB (`MSDA MongoDB`)
 
 | Field       | Nilai                              |
 |-------------|------------------------------------|
 | Host        | `mongo` (nama service Docker)      |
 | Port        | `27017`                            |
-| Database    | `sata`                             |
+| Database    | `msda`                             |
 | Username    | nilai `MONGO_ROOT_USER` di `.env`  |
 | Password    | nilai `MONGO_ROOT_PASSWORD` di `.env` |
 | Auth Source | `admin`                            |
 
-### 2. Slack (`SATA Slack`)
+### 2. Slack (`MSDA Slack`)
 
 - Buat Slack App di [https://api.slack.com/apps](https://api.slack.com/apps)
 - Aktifkan **Incoming Webhooks**
 - Copy **Webhook URL** (`https://hooks.slack.com/services/...`) ke variabel `SLACK_WEBHOOK_URL` di `.env`
 - Workflow menggunakan URL ini langsung via `$env.SLACK_WEBHOOK_URL`
 
-### 3. Redis (`SATA Redis`)
+### 3. Redis (`MSDA Redis`)
 
 | Field    | Nilai                         |
 |----------|-------------------------------|
@@ -156,7 +156,7 @@ Setelah import, buka setiap workflow dan buat credentials berikut:
 - Dapatkan API key di [https://aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey)
 - Masukkan ke variabel `GOOGLE_AI_API_KEY` di file `.env`
 - Di n8n buat credential bertipe **HTTP Query Auth**, field `name` = `key`, field `value` = API key Anda
-- Beri nama credential: `SATA Google AI`
+- Beri nama credential: `MSDA Google AI`
 
 ---
 
@@ -166,7 +166,7 @@ Semua variabel dikonfigurasi di `infrastructure/docker/.env`:
 
 | Variabel              | Digunakan di Workflow            | Keterangan                                      |
 |-----------------------|----------------------------------|-------------------------------------------------|
-| `SATA_WEBHOOK_TOKEN`  | DNS Ingestion (validasi)         | Token rahasia yang sama dengan config Vector    |
+| `MSDA_WEBHOOK_TOKEN`  | DNS Ingestion (validasi)         | Token rahasia yang sama dengan config Vector    |
 | `GOOGLE_AI_API_KEY`   | Daily Report (Gemini)            | API key dari Google AI Studio                   |
 | `SLACK_WEBHOOK_URL`   | DNS Ingestion + Daily Report     | Incoming Webhook URL dari Slack App             |
 | `MONGO_ROOT_USER`     | Credential MongoDB               | Username MongoDB                                |
@@ -178,11 +178,11 @@ Semua variabel dikonfigurasi di `infrastructure/docker/.env`:
 
 Setelah semua credentials dikonfigurasi:
 
-1. Buka workflow **SATA — DNS Ingestion Pipeline**
+1. Buka workflow **MSDA — DNS Ingestion Pipeline**
 2. Klik toggle **Inactive → Active** di pojok kanan atas
-3. Ulangi untuk **SATA — Daily AI Report**
+3. Ulangi untuk **MSDA — Daily AI Report**
 
-Webhook akan aktif di: `http://localhost:5678/webhook/sata-dns`
+Webhook akan aktif di: `http://localhost:5678/webhook/msda-dns`
 
 ---
 
@@ -191,9 +191,9 @@ Webhook akan aktif di: `http://localhost:5678/webhook/sata-dns`
 Gunakan `curl` dari terminal untuk simulasi kiriman Vector:
 
 ```bash
-curl -X POST http://localhost:5678/webhook/sata-dns \
+curl -X POST http://localhost:5678/webhook/msda-dns \
   -H "Content-Type: application/json" \
-  -H "X-SATA-Token: changeme-token" \
+  -H "X-MSDA-Token: changeme-token" \
   -d '[
     {
       "timestamp": "2026-08-18T09:45:00.000Z",

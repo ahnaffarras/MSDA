@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { MongoClient } from 'mongodb'
 import { escapeRegex } from '@/lib/query'
 
-const uri = process.env.MONGODB_URI || 'mongodb://sata:sata123@mongo:27017/sata?authSource=admin'
+const uri = process.env.MONGODB_URI || 'mongodb://msda:msda123@mongo:27017/msda?authSource=admin'
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
@@ -12,7 +12,7 @@ export async function GET(request: Request) {
   
   try {
     client = await MongoClient.connect(uri)
-    const db = client.db('sata')
+    const db = client.db(process.env.MONGODB_DB || 'msda')
     
     const query: Record<string, unknown> = {}
     if (search) {

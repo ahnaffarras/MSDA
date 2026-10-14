@@ -9,7 +9,7 @@
 
 import { MongoClient, type Db } from "mongodb";
 
-const MONGO_DB = process.env.MONGODB_DB ?? "sata";
+const MONGO_DB = process.env.MONGODB_DB ?? "msda";
 
 // ── Dev: persist across HMR cycles via global ──────────────────────────────
 declare global {
@@ -60,7 +60,7 @@ export async function getMongoClient(): Promise<MongoClient> {
 }
 
 /**
- * Returns the SATA database handle.
+ * Returns the MSDA database handle.
  *
  * Usage:
  *   const db = await getDb();

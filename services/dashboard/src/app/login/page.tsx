@@ -67,8 +67,8 @@ function LoginForm() {
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center text-center mb-6">
           <BrandMark className="w-12 h-12" />
-          <h1 className="mt-4 text-2xl font-semibold tracking-tight text-chalk">Sign in to SATA</h1>
-          <p className="mt-1 text-sm text-chalk-dim">Smart AP Traffic Analyzer</p>
+          <h1 className="mt-4 text-2xl font-semibold tracking-tight text-chalk">Sign in to MSDA</h1>
+          <p className="mt-1 text-sm text-chalk-dim">MikroTik Smart DNS Analytics</p>
         </div>
 
         <form

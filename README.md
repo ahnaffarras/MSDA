@@ -1,10 +1,21 @@
-# Smart AP Traffic Analyzer (SATA)
+# MikroTik Smart DNS Analytics (MSDA)
 
-Smart AP Traffic Analyzer (SATA) is an end-to-end monitoring and analytics platform for MikroTik-based network environments. It is designed to collect DNS-related traffic information, transform it into structured data, enrich it with AI, and present actionable insights through Slack and a web dashboard.
+> **Catatan Proyek:** MSDA merupakan pengembangan lanjutan dari proyek **SATA-AI (Smart AP Traffic Analyzer)**. Lihat bagian [Latar Belakang: Pengembangan dari SATA-AI](#latar-belakang-pengembangan-dari-sata-ai) di bawah.
+
+MikroTik Smart DNS Analytics (MSDA) is an end-to-end monitoring and analytics platform for MikroTik-based network environments. It is designed to collect DNS-related traffic information, transform it into structured data, enrich it with AI, and present actionable insights through Slack and a web dashboard.
+
+## Latar Belakang: Pengembangan dari SATA-AI
+
+MSDA (MikroTik Smart DNS Analytics) adalah pengembangan dan evolusi lanjutan dari proyek **SATA-AI (Smart AP Traffic Analyzer)**.
+
+- **SATA-AI** berfokus pada analisis traffic access point (AP) secara umum.
+- **MSDA** mempersempit dan memperdalam fokus tersebut pada **analisis traffic DNS berbasis router MikroTik**, dengan pipeline pengolahan data terstruktur, pengayaan konteks keamanan berbasis AI, serta pemantauan interaktif melalui dashboard web dan notifikasi Slack.
+
+Arsitektur dasar (MikroTik → Vector → n8n → Redis/MongoDB → Dashboard) dilanjutkan dari SATA-AI, sementara penamaan, variabel environment, header webhook (`X-MSDA-Token`), dan komponen layanan kini seluruhnya menggunakan prefix **MSDA**. Catatan: nama lama `SATA_*` tidak lagi didukung, jadi gunakan `MSDA_*` pada file `.env`.
 
 ## What This Application Does
 
-SATA helps network administrators and IT teams understand how clients are using the network by analyzing DNS traffic from access points. The platform can be used to:
+MSDA helps network administrators and IT teams understand how clients are using the network by analyzing DNS traffic from access points. The platform can be used to:
 - capture browsing-related DNS events from MikroTik
 - normalize raw log data into JSON
 - summarize activity by access point and client
@@ -22,8 +33,7 @@ The system is being built in two major phases:
 
 The current repository includes the initial foundation for:
 - Docker-based deployment for core services
-- MongoDB f
-or persistent storage
+- MongoDB for persistent storage
 - n8n for workflow orchestration
 - Vector as the log parsing engine
 - a Next.js dashboard for visualization
@@ -39,7 +49,7 @@ or persistent storage
 ### 1. Clone the repository
 ```bash
 git clone <repository-url>
-cd sata-ai
+cd msda
 ```
 
 ### 2. Prepare environment files

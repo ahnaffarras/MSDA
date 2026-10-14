@@ -1,6 +1,6 @@
-# SATA — Guide Integration (Direct Syslog & Vector)
+# MSDA — Guide Integration (Direct Syslog & Vector)
 
-Integrasi komponen infrastruktur Mikrotik dan Log Parser ke proyek SATA-AI.
+Integrasi komponen infrastruktur Mikrotik dan Log Parser ke proyek MSDA.
 
 ## Arsitektur Ringan (Direct Syslog to Vector)
 
@@ -21,14 +21,14 @@ Integrasi komponen infrastruktur Mikrotik dan Log Parser ke proyek SATA-AI.
 ## Setup Step-by-Step
 
 ### 1. Konfigurasi Mikrotik
-1. Buka file [`infrastructure/mikrotik/mikrotik-setup.rsc`](file:///D:/ahnaf-code/turgocloudyogya/sata-ai/infrastructure/mikrotik/mikrotik-setup.rsc).
-2. Ubah variabel `:local syslogServerIP "192.168.10.10"` sesuai dengan IP Server tempat Docker berjalan.
+1. Buka file [`infrastructure/mikrotik/mikrotik-setup.rsc`](../mikrotik/mikrotik-setup.rsc).
+2. Ubah variabel `:local msdaServerIP "192.168.10.10"` sesuai dengan IP Server tempat Docker berjalan.
 3. Import script di Mikrotik RouterOS v7:
    ```routeros
    /import file-name=mikrotik-setup.rsc
    ```
 
-### 2. Jalankan Stack Docker SATA-AI
+### 2. Jalankan Stack Docker MSDA
 1. Masuk ke folder docker:
    ```bash
    cd infrastructure/docker

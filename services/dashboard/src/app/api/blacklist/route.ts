@@ -60,7 +60,9 @@ export async function GET() {
       })
 
     return NextResponse.json(entries, {
-      headers: { 'x-sata-admin-protected': adminProtected() ? '1' : '0' },
+      headers: {
+        'x-msda-admin-protected': adminProtected() ? '1' : '0',
+      },
     })
   } catch (error) {
     console.error('[blacklist GET]', error)

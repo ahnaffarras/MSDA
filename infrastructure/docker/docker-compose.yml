@@ -1,11 +1,11 @@
 services:
   mongo:
     image: mongo:4.4
-    container_name: sata-mongo
+    container_name: msda-mongo
     restart: unless-stopped
     environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:-sata}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-sata123}
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:-msda}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-msda123}
     ports:
       - "27017:27017"
     volumes:
@@ -13,7 +13,7 @@ services:
 
   n8n:
     image: n8nio/n8n:latest
-    container_name: sata-n8n
+    container_name: msda-n8n
     restart: unless-stopped
     depends_on:
       - mongo
@@ -38,7 +38,7 @@ services:
 
   redis:
     image: redis:7.2-alpine
-    container_name: sata-redis
+    container_name: msda-redis
     restart: unless-stopped
     ports:
       - "6379:6379"
@@ -48,7 +48,7 @@ services:
 
   vector:
     image: timberio/vector:0.38.0-debian
-    container_name: sata-vector
+    container_name: msda-vector
     restart: unless-stopped
     ports:
       - "514:514/udp"
@@ -56,7 +56,7 @@ services:
       - "8686:8686"
     environment:
       - VECTOR_N8N_WEBHOOK_URL=http://n8n:5678/webhook/dns-scan-webhook
-      - SATA_WEBHOOK_TOKEN=${SATA_WEBHOOK_TOKEN:-changeme-token}
+      - MSDA_WEBHOOK_TOKEN=${MSDA_WEBHOOK_TOKEN:-changeme-token}
     volumes:
       - ../log-parser/vector.toml:/etc/vector/vector.toml:ro
       - vector-data:/var/lib/vector
@@ -64,9 +64,9 @@ services:
 
   backend:
     build:
-      context: ../../services/sata-ai-backend
+      context: ../../services/msda-backend
       dockerfile: Dockerfile
-    container_name: sata-backend
+    container_name: msda-backend
     restart: unless-stopped
     depends_on:
       - mongo
@@ -76,11 +76,11 @@ services:
     environment:
       APP_ENV: production
       PORT: 8080
-      MONGODB_URI: mongodb://${MONGO_ROOT_USER:-sata}:${MONGO_ROOT_PASSWORD:-sata123}@mongo:27017/sata?authSource=admin
-      MONGODB_DB: sata
+      MONGODB_URI: mongodb://${MONGO_ROOT_USER:-msda}:${MONGO_ROOT_PASSWORD:-msda123}@mongo:27017/${MONGODB_DB:-msda}?authSource=admin
+      MONGODB_DB: ${MONGODB_DB:-msda}
       REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET:-change-me-to-a-random-secret}
-      SATA_WEBHOOK_TOKEN: ${SATA_WEBHOOK_TOKEN:-changeme-token}
+      MSDA_WEBHOOK_TOKEN: ${MSDA_WEBHOOK_TOKEN:-changeme-token}
       ALLOWED_ORIGINS: http://localhost:3000
 
   dashboard:
@@ -89,7 +89,7 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_API_URL: http://backend:8080
-    container_name: sata-dashboard
+    container_name: msda-dashboard
     restart: unless-stopped
     depends_on:
       - backend
@@ -97,15 +97,15 @@ services:
       - "3000:3000"
     environment:
       NODE_ENV: production
-      MONGODB_URI: mongodb://${MONGO_ROOT_USER:-sata}:${MONGO_ROOT_PASSWORD:-sata123}@mongo:27017/sata?authSource=admin
+      MONGODB_URI: mongodb://${MONGO_ROOT_USER:-msda}:${MONGO_ROOT_PASSWORD:-msda123}@mongo:27017/${MONGODB_DB:-msda}?authSource=admin
       NEXT_PUBLIC_API_URL: http://backend:8080
       NEXT_PUBLIC_BASE_URL: http://dashboard:3000
       NEXT_PUBLIC_WS_URL: ws://backend:8080
-      SATA_BOOTSTRAP_ADMIN_USER: ${SATA_BOOTSTRAP_ADMIN_USER:-admin}
-      SATA_BOOTSTRAP_ADMIN_PASSWORD: ${SATA_BOOTSTRAP_ADMIN_PASSWORD:-}
-      SATA_SESSION_HOURS: ${SATA_SESSION_HOURS:-12}
-      SATA_COOKIE_SECURE: ${SATA_COOKIE_SECURE:-}
-      SATA_ALLOWED_ORIGINS: ${SATA_ALLOWED_ORIGINS:-}
+      MSDA_BOOTSTRAP_ADMIN_USER: ${MSDA_BOOTSTRAP_ADMIN_USER:-admin}
+      MSDA_BOOTSTRAP_ADMIN_PASSWORD: ${MSDA_BOOTSTRAP_ADMIN_PASSWORD:-}
+      MSDA_SESSION_HOURS: ${MSDA_SESSION_HOURS:-12}
+      MSDA_COOKIE_SECURE: ${MSDA_COOKIE_SECURE:-}
+      MSDA_ALLOWED_ORIGINS: ${MSDA_ALLOWED_ORIGINS:-}
 
 volumes:
   mongo-data:

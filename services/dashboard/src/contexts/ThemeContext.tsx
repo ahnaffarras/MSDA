@@ -11,7 +11,7 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
 
-const STORAGE_KEY = 'sata-theme'
+const STORAGE_KEY = 'msda-theme'
 
 /**
  * Sumber kebenaran tema adalah class di <html>. Class itu dipasang oleh script

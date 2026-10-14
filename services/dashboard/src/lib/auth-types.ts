@@ -17,7 +17,7 @@ export const ROLE_HINT: Record<Role, string> = {
   viewer: 'Can view the dashboard and reports. Cannot change anything.',
 }
 
-export const SESSION_COOKIE = 'sata_session'
+export const SESSION_COOKIE = 'msda_session'
 
 export const USERNAME_RE = /^[a-z0-9._-]{3,32}$/
 export const USERNAME_HELP = '3–32 characters: lowercase letters, numbers, dot, dash or underscore.'
@@ -28,7 +28,7 @@ export const PASSWORD_MAX = 128
 const COMMON = new Set([
   'password', 'password1', 'password123', 'passw0rd', 'qwertyuiop', 'qwerty123',
   '1234567890', '0123456789', '12345678910', 'adminadmin', 'administrator',
-  'welcome123', 'letmein123', 'iloveyou123', 'sata12345', 'sataadmin',
+  'welcome123', 'letmein123', 'iloveyou123', 'msda12345', 'msdaadmin',
 ])
 
 /** Mengembalikan pesan kesalahan, atau null kalau kata sandi diterima. */

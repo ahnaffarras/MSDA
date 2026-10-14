@@ -195,7 +195,7 @@ export default function SettingsPage() {
     <div className="min-h-screen bg-background">
       <PageHeader
         title="Network Management"
-        description="Manage the classes, rooms and access points that SATA monitors."
+        description="Manage the classes, rooms and access points that MSDA monitors."
         actions={
           isAdmin ? (
             <button

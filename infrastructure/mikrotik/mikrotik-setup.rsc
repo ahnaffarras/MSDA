@@ -1,41 +1,41 @@
-# SATA - Smart AP Traffic Analyzer
+# MSDA - MikroTik Smart DNS Analytics
 # RouterOS v6 & v7 Universal Import Script
 
-:local sataServerIP "192.168.5.254"
-:local sataServerPort 514
+:local msdaServerIP "192.168.5.254"
+:local msdaServerPort 514
 
-:put "SATA: Memulai setup..."
+:put "MSDA: Memulai setup..."
 
 :foreach i in=[/system logging find] do={
 :local act [/system logging get $i action]
-:if ($act = "sataremotesyslog") do={ /system logging remove $i }
+:if ($act = "msdaremotesyslog") do={ /system logging remove $i }
 }
 :foreach i in=[/system logging action find] do={
 :local n [/system logging action get $i name]
-:if ($n = "sataremotesyslog") do={ /system logging action remove $i }
+:if ($n = "msdaremotesyslog") do={ /system logging action remove $i }
 }
 :foreach i in=[/ip firewall nat find] do={
 :local c [/ip firewall nat get $i comment]
-:if ($c = "SATA-DNS-UDP" or $c = "SATA-DNS-TCP") do={ /ip firewall nat remove $i }
+:if ($c = "MSDA-DNS-UDP" or $c = "MSDA-DNS-TCP") do={ /ip firewall nat remove $i }
 }
 
-:put "SATA: Konfigurasi lama dibersihkan."
+:put "MSDA: Konfigurasi lama dibersihkan."
 
-/ip firewall nat add chain=dstnat protocol=udp dst-port=53 action=redirect to-ports=53 comment="SATA-DNS-UDP"
-/ip firewall nat add chain=dstnat protocol=tcp dst-port=53 action=redirect to-ports=53 comment="SATA-DNS-TCP"
+/ip firewall nat add chain=dstnat protocol=udp dst-port=53 action=redirect to-ports=53 comment="MSDA-DNS-UDP"
+/ip firewall nat add chain=dstnat protocol=tcp dst-port=53 action=redirect to-ports=53 comment="MSDA-DNS-TCP"
 
-:put "SATA: NAT firewall rule ditambahkan."
+:put "MSDA: NAT firewall rule ditambahkan."
 
-/system logging action add name=sataremotesyslog target=remote remote=$sataServerIP remote-port=$sataServerPort
+/system logging action add name=msdaremotesyslog target=remote remote=$msdaServerIP remote-port=$msdaServerPort
 
-:put "SATA: Logging action dibuat."
+:put "MSDA: Logging action dibuat."
 
-/system logging add topics=dns action=sataremotesyslog
+/system logging add topics=dns action=msdaremotesyslog
 
-:put "SATA: Logging rule DNS ditambahkan."
+:put "MSDA: Logging rule DNS ditambahkan."
 
 
 
 :put "================================================="
-:put "  SUCCESS: SATA Mikrotik Setup Berhasil!          "
+:put "  SUCCESS: MSDA Mikrotik Setup Berhasil!          "
 :put "================================================="
