@@ -10,20 +10,31 @@
 
 - **Base URL:** `/api/v1`
 - **Format:** JSON, `snake_case` sama persis dengan field MongoDB (biar gak perlu mapping ekstra di frontend).
-- **Auth:** JWT Bearer token untuk endpoint admin (CRUD blacklist, dsb). Endpoint read-only dashboard bisa pakai auth session biasa.
+- **Auth:** Backend **tidak punya login sendiri**. Semua `/api/v1/*` (kecuali `/health` dan `/webhooks/n8n`) butuh header `X-Internal-Token` yang hanya dikirim server dashboard setelah memverifikasi sesi login pengguna (lihat §1). Webhook n8n memakai `X-MSDA-Token`.
 - **`risk_level` / klasifikasi:** semua level risiko (`type`, `blocked_level`, dsb.) **sudah final dari MongoDB** (hasil AI Analyzer / admin) — API **tidak boleh** re-classify di response, tinggal pass-through. *(Ini konsisten sama fix yang sudah kamu kerjain kemarin soal risk_level di frontend.)*
 - **Pagination:** query param `?page=1&limit=20`, response selalu punya `meta: { page, limit, total, total_pages }`.
-- **Realtime:** WebSocket (`/ws/dashboard`) untuk push data dari webhook n8n ke dashboard tanpa polling.
+- **Realtime:** dashboard saat ini memakai *polling* `GET /notifications/unread-count` (20 detik, berhenti saat tab tidak aktif). WebSocket `/ws/dashboard` tetap ada di backend tetapi hanya menerima koneksi bertoken internal (tidak untuk browser langsung); SSE adalah rencana tahap berikutnya.
 
 ---
 
-## 1. Auth
+## 1. Keamanan & Akses
 
-| Method | Endpoint | Fungsi |
-|--------|----------|--------|
-| POST | `/api/v1/auth/login` | Login admin (username/password → JWT) |
-| POST | `/api/v1/auth/logout` | Invalidate session/token |
-| GET | `/api/v1/auth/me` | Info admin yang login |
+Endpoint login/logout/JWT backend **sudah dihapus**. Alurnya:
+
+```
+Browser ──(cookie sesi)──▶ Dashboard /api-proxy/* ──(X-Internal-Token + X-MSDA-User)──▶ Backend /api/v1/*
+```
+
+- Proxy (`services/dashboard/src/app/api-proxy/[...path]/route.ts`) memeriksa sesi ke database, menolak method selain GET/HEAD untuk peran `viewer` (403), dan **tidak** meneruskan cookie browser ke backend.
+- Backend memvalidasi `X-Internal-Token` (= env `MSDA_INTERNAL_TOKEN`, perbandingan waktu-konstan). Env kosong → semua request ditolak `503` (gagal-tertutup).
+- Header `X-MSDA-User` (nama pengguna dashboard) hanya dipercaya karena token internal sudah lolos; dipakai untuk mengisi `ack_by`.
+- Port backend **tidak dipublikasikan ke host**.
+
+| Method | Endpoint | Auth |
+|--------|----------|------|
+| GET | `/api/v1/health` | publik (hanya `ok`/`down` untuk Mongo & Redis) |
+| POST | `/api/v1/webhooks/n8n` | `X-MSDA-Token` |
+| semua lainnya | `/api/v1/*` | `X-Internal-Token` |
 
 ---
 
@@ -152,7 +163,7 @@ Endpoint ini yang dipanggil n8n node `Third Party Webhook` (FASE 6) — ganti/le
 
 | Method | Endpoint | Fungsi |
 |--------|----------|--------|
-| POST | `/api/v1/webhooks/n8n` | Terima payload `type_send: "blacklist_alert" \| "batch_summary"` dari n8n → simpan ke `notifications` (opsional) → broadcast ke `/ws/dashboard` |
+| POST | `/api/v1/webhooks/n8n` | Terima payload `type_send: "blacklist_alert" \| "batch_summary" \| "anomaly_alert" \| "system_alert"` (+ `severity`, `dedup_key` opsional) dari n8n → simpan ke `notifications` (opsional) → broadcast ke `/ws/dashboard` |
 
 **Request body** = persis struktur `n8n-to-realtime-backend-administrator.jsonc` (lihat STRUCTURE.md § Webhook Hit). Backend harus:
 1. Validasi `type_send`.
@@ -167,9 +178,12 @@ Response cukup `200 { "received": true }` — jangan bikin n8n nunggu proses ber
 
 | Method | Endpoint | Fungsi |
 |--------|----------|--------|
-| GET | `/api/v1/notifications` | List notifikasi (`blacklist_alert` / `batch_summary`) terbaru, buat lonceng notif di dashboard |
-| PATCH | `/api/v1/notifications/:id/read` | Tandai sudah dibaca |
-| PATCH | `/api/v1/notifications/read-all` | Tandai semua sudah dibaca |
+| GET | `/api/v1/notifications` | List notifikasi terbaru. Filter opsional: `status` (`new`/`acknowledged`/`resolved`), `severity` (`info`/`warning`/`critical`), `type_send`, `from`, `to` (RFC3339 atau `YYYY-MM-DD`), `q` (domain/grup/IP), plus `page`, `limit` (maks. 100) |
+| GET | `/api/v1/notifications/unread-count` | `{ unread, critical, latest_id, latest_at }` untuk badge sidebar dan deteksi alert baru (polling) |
+| PATCH | `/api/v1/notifications/:id/status` | Body `{ "status": "new\|acknowledged\|resolved", "note": "..." }`. 404 bila id tidak ada |
+| POST | `/api/v1/notifications/bulk-status` | Body `{ "ids": [..maks. 200], "status": "...", "note": "..." }` |
+| PATCH | `/api/v1/notifications/:id/read` | (kompatibilitas) `new` → `acknowledged` |
+| PATCH | `/api/v1/notifications/read-all` | (kompatibilitas) semua `new` → `acknowledged` |
 
 ---
 
@@ -207,7 +221,8 @@ msda-backend/
 │   ├── service/          # Business logic (validasi blocked_level, agregasi summary, dsb.)
 │   ├── repository/       # Mongo query layer, satu file per collection
 │   ├── model/            # Struct: DNSInfo, DNSBlacklist, ClientAccessDNS, WebhookPayload
-│   ├── middleware/        # JWT auth, logging, CORS
+│   ├── config/            # Validasi konfigurasi production (secret/password default ditolak)
+│   ├── middleware/        # token internal & webhook, actor, logging, CORS
 │   └── ws/                # WebSocket hub (broadcast ke dashboard)
 ├── pkg/
 │   ├── mongodb/           # Koneksi & helper Mongo
@@ -230,10 +245,8 @@ msda-backend/
 ## 11. Ringkasan Endpoint (cepat lihat)
 
 ```
-Auth
-  POST   /api/v1/auth/login
-  POST   /api/v1/auth/logout
-  GET    /api/v1/auth/me
+Health (publik)
+  GET    /api/v1/health
 
 Dashboard
   GET    /api/v1/dashboard/summary
@@ -270,6 +283,9 @@ Webhook (dari n8n)
 
 Notifications
   GET    /api/v1/notifications
+  GET    /api/v1/notifications/unread-count
+  POST   /api/v1/notifications/bulk-status
+  PATCH  /api/v1/notifications/:id/status
   PATCH  /api/v1/notifications/:id/read
   PATCH  /api/v1/notifications/read-all
 

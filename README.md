@@ -40,10 +40,11 @@ The current repository includes the initial foundation for:
 
 ## Installation
 
+MSDA runs entirely in Docker. You do not need to run `npm run dev` to use it; that is only for dashboard development (see below).
+
 ### Prerequisites
-- Docker Desktop or Docker Engine
-- Docker Compose
-- Node.js 18+ and npm
+- Docker Desktop or Docker Engine with Docker Compose v2
+- `openssl` (or any tool that makes random strings) to generate secrets
 - WSL if you are using Docker from Windows
 
 ### 1. Clone the repository
@@ -52,27 +53,56 @@ git clone <repository-url>
 cd msda
 ```
 
-### 2. Prepare environment files
-Copy the example environment file if needed:
+### 2. Create the environment file and fill in the secrets
 ```bash
-cp infrastructure/docker/.env.example infrastructure/docker/.env
+cd infrastructure/docker
+cp .env.example .env
 ```
-
-### 3. Start the infrastructure services
+Open `.env` and set the required values. Generate each secret with:
 ```bash
-docker compose -f infrastructure/docker/docker-compose.yml up -d
+openssl rand -hex 32   # MSDA_WEBHOOK_TOKEN and MSDA_INTERNAL_TOKEN (two different values)
+openssl rand -hex 16   # MONGO_ROOT_PASSWORD and N8N_ENCRYPTION_KEY
 ```
+There are no default secrets any more: `docker compose up` stops with a clear message if a required value is empty. With `APP_ENV=production` (set by the compose file) the backend also refuses to start when a token or the MongoDB password is empty, too short, or still a placeholder.
 
-### 4. Start the dashboard
+> If you already have a running installation: the MongoDB password only applies when the data volume is first created, and `N8N_ENCRYPTION_KEY` must stay the same as before or n8n can no longer read its saved credentials.
+
+### 3. Start everything
 ```bash
-cd services/dashboard
-npm install
-npm run dev
+docker compose up -d --build
+docker compose ps        # every service should become "healthy"
 ```
 
 Then open:
-- http://localhost:5678 for n8n
-- http://localhost:3000 for the dashboard
+- http://localhost:3000 for the dashboard (the first administrator password is printed once in `docker logs msda-dashboard` unless you set `MSDA_BOOTSTRAP_ADMIN_PASSWORD`)
+- http://localhost:5678 for n8n (put it behind a reverse proxy with authentication before exposing it)
+
+Only these ports are published to the host: `3000` (dashboard), `5678` (n8n), `514` (syslog from MikroTik) and `127.0.0.1:8686` (Vector API). MongoDB, Redis and the Go backend are reachable only inside the Docker network.
+
+### Local development
+To reach MongoDB, Redis and the backend from your machine (bound to `127.0.0.1` only):
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+cd ../../services/dashboard
+npm ci
+npm run dev
+```
+Checks used by CI: `npm run lint`, `npm run typecheck`, `npm test`, `npm run build` (dashboard) and `go vet ./... && go test ./... && go build ./...` (backend).
+
+## Pages at a Glance
+
+| Page | What it is for |
+|---|---|
+| **Dashboard** | Today's picture: queries, flagged traffic, trends and the busiest hours. Choose *Today / 24h / 7d / 30d* or a custom date range; the choice is kept in the URL so you can share it. |
+| **Live Feed** | DNS requests as they arrive, with pause and filters. |
+| **DNS Intelligence**, **Domain Info** | Browse domains and categories. Click a domain for its own page: who asked for it, when, from which access point, and whether it is blocked. |
+| **Clients** | Everyone seen on the network and the labels you gave them (import a CSV to label many at once). Click a client for its timeline, top domains and access points. |
+| **Blocklist** | Block domains, optionally *until a date*, import/export CSV, and keep an **Allowlist** that always wins over the blocklist. |
+| **Notifications** | Alerts with severity and a *new → acknowledged → resolved* workflow; unread count in the sidebar. Notification settings (Slack/Telegram routing, quiet hours) are under *Notifications → Settings*. |
+| **Reports** | Daily AI reports (export to CSV) and a weekly report built from real data; *Print / PDF* saves any report as a PDF. |
+| **Users & Access**, **Audit Log** | Administrators only: accounts, client privacy for viewers, and a trail of who did what. |
+
+Backups run automatically; see [docs/backup-restore.md](docs/backup-restore.md). Performance notes and indexes: [docs/performance.md](docs/performance.md).
 
 ## How to Use It
 
@@ -90,6 +120,8 @@ The repository is organized as follows:
 - [infrastructure/mikrotik](infrastructure/mikrotik) contains MikroTik-related notes
 - [services/n8n](services/n8n) is the workflow automation area
 - [services/dashboard](services/dashboard) contains the web dashboard
+- [services/msda-backend](services/msda-backend) contains the Go API used by the dashboard (not exposed to the host)
+- [data-struktur](data-struktur) documents collections, fields and the webhook contract
 
 ## Contributing
 

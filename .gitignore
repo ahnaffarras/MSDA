@@ -27,6 +27,15 @@ coverage/
 .n8n/
 *.json.backup
 
+# Salinan manual — gunakan git, bukan file *.backup
+*.backup
+*.backup-*
+*.backup[0-9]*
+*.bak
+
+# Build info TypeScript
+*.tsbuildinfo
+
 # Mongo / local dumps
 *.bson
 *.dump

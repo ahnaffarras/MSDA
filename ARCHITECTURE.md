@@ -82,7 +82,9 @@ MSDA should evolve from an initial technical prototype into an MVP product that 
 ### 1. Infrastructure Module
 
 Responsible for deployment and runtime orchestration.
-- Docker Compose orchestrates MongoDB, n8n, and Vector
+- Docker Compose orchestrates MongoDB, Redis, n8n, Vector, the Go backend and the dashboard
+- Only the dashboard (3000), n8n (5678) and Vector syslog (514) are published to the host; MongoDB, Redis and the backend stay on the internal Docker network
+- Services expose health checks and wait for their dependencies to be healthy
 - Environment configuration is separated from application logic
 
 ### 2. Log Parsing Module
@@ -111,6 +113,21 @@ Responsible for interpretation and insight generation.
 Responsible for presenting the data to users.
 - Next.js frontend renders charts and summary cards
 - The dashboard is designed to support monitoring and executive reporting
+
+### 6. Security and Access Module
+
+Responsible for who can see and change what.
+- Users sign in to the dashboard with a session cookie (`dashboard_users`, `dashboard_sessions`); roles are `admin` (read and write) and `viewer` (read only)
+- The Go backend has no login of its own. The dashboard proxy (`/api-proxy/*`) verifies the session, blocks write methods for viewers, and forwards the call with a secret `X-Internal-Token` (`MSDA_INTERNAL_TOKEN`); direct calls to the backend without it are rejected
+- n8n calls the backend webhook with `X-MSDA-Token` (`MSDA_WEBHOOK_TOKEN`); both tokens fail closed when unset
+- With `APP_ENV=production` the backend refuses to start if a token or the MongoDB password is empty, too short, or still a placeholder
+- Every sensitive dashboard action is written to `audit_logs` (sign-ins, user and blocklist changes, settings, cleanup, notification status). Secrets are never stored in the log. Retention defaults to 180 days and is managed on the Storage page
+
+### 7. Alerting Module
+
+- Notifications carry `severity` (`info`/`warning`/`critical`) and a handling `status` (`new` → `acknowledged` → `resolved`, with notes)
+- The dashboard polls `unread-count` every 20 seconds (paused while the tab is hidden) to drive the sidebar badge, toasts and automatic list refresh
+- Channel routing (Slack/Telegram), minimum severity, batching and quiet hours live in `notification_settings`; n8n reads them, and bot tokens stay in n8n only
 
 ## Data Model Direction
 
