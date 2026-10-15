@@ -1,1 +1,73 @@
-# PR Checks
+# PR Checks — dijalankan pada setiap pull request dan push ke main.
+# n8n (services/n8n) tidak dicek di sini: dikembangkan terpisah.
+name: PR Checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  dashboard:
+    name: Dashboard (lint, typecheck, test, build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/dashboard
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: services/dashboard/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npx next typegen && npx tsc --noEmit
+      - run: npm test
+      - run: npm run build
+        env:
+          MONGODB_URI: mongodb://placeholder:27017/msda
+
+  backend:
+    name: Backend (vet, test, build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/msda-backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache-dependency-path: services/msda-backend/go.sum
+      - run: test -z "$(gofmt -l ./internal/config ./internal/middleware)" || (gofmt -l ./internal/config ./internal/middleware; exit 1)
+      - run: go vet ./...
+      - run: go test ./...
+      - run: go build ./...
+
+  scripts:
+    name: Shell scripts (syntax)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash -n infrastructure/backup/backup.sh
+
+  docker:
+    name: Docker (compose config + image builds)
+    runs-on: ubuntu-latest
+    needs: [dashboard, backend]
+    env:
+      # Nilai palsu khusus CI — hanya agar `docker compose config` dapat memvalidasi berkas.
+      MONGO_ROOT_PASSWORD: ci-only-mongo-password
+      N8N_ENCRYPTION_KEY: ci-only-n8n-key
+      MSDA_WEBHOOK_TOKEN: ci-only-webhook-token-0123456789abcdef
+      MSDA_INTERNAL_TOKEN: ci-only-internal-token-0123456789abcd
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose -f infrastructure/docker/docker-compose.yml config -q
+      - run: docker compose -f infrastructure/docker/docker-compose.yml -f infrastructure/docker/docker-compose.dev.yml config -q
+      - run: docker compose -f infrastructure/docker/docker-compose.yml build backend dashboard
