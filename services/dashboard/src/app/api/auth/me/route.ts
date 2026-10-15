@@ -12,6 +12,7 @@ import {
   verifyPassword,
 } from '@/lib/auth'
 import { validatePassword } from '@/lib/auth-types'
+import { actorOf, recordAudit } from '@/lib/audit'
 
 export const dynamic = 'force-dynamic'
 
@@ -87,7 +88,10 @@ export async function PATCH(request: Request) {
     const users = await usersCol()
     await users.updateOne({ _id: authed.doc._id }, { $set: set })
     // Ganti kata sandi → semua perangkat lain harus login ulang; sesi ini tetap hidup
-    if (passwordChanged) await revokeUserSessions(authed.doc._id, authed.tokenHash)
+    if (passwordChanged) {
+      await revokeUserSessions(authed.doc._id, authed.tokenHash)
+      await recordAudit({ action: 'auth.password_change', request, actor: actorOf(authed), targetType: 'user', targetId: authed.user.id })
+    }
     const fresh = await users.findOne({ _id: authed.doc._id })
     return NextResponse.json({ ok: true, user: fresh ? toPublicUser(fresh) : authed.user }, { headers: NO_STORE })
   } catch (error) {

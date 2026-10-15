@@ -43,6 +43,36 @@ export interface BlacklistEntry {
   /** jumlah akses ke domain ini (termasuk subdomain) 7 hari terakhir */
   hits_7d?: number
   last_hit?: string | null
+  /** akhir masa berlaku (ISO) — setelahnya entri tidak lagi memblokir; null = permanen */
+  expires_at?: string | null
+  /** asal entri: manual | feed | auto | import */
+  source?: string
+  note?: string
+  /** domain ini tercakup allowlist → allowlist menang, entri tidak berlaku */
+  allowlisted?: boolean
+}
+
+export const BLACKLIST_SOURCES = ['manual', 'feed', 'auto', 'import'] as const
+export type BlacklistSource = (typeof BLACKLIST_SOURCES)[number]
+
+/** Entri kedaluwarsa bila expires_at sudah lewat. */
+export function isExpired(entry: { expires_at?: string | null }, now: number = Date.now()): boolean {
+  return Boolean(entry.expires_at) && Date.parse(entry.expires_at as string) <= now
+}
+
+/** Entri benar-benar memblokir: aktif, belum kedaluwarsa, dan tidak ditimpa allowlist. */
+export const isEffective = (e: BlacklistEntry, now: number = Date.now()) => e.is_active && !isExpired(e, now) && !e.allowlisted
+
+/**
+ * YYYY-MM-DD → akhir hari itu dalam WIB (UTC+7). "" / null → null (permanen).
+ * Mengembalikan 'invalid' bila bukan tanggal kalender yang sah.
+ */
+export function parseExpiry(input: unknown): Date | null | 'invalid' {
+  if (input === null || input === undefined || input === '') return null
+  if (typeof input !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(input)) return 'invalid'
+  const d = new Date(`${input}T23:59:59.999+07:00`)
+  if (Number.isNaN(d.getTime())) return 'invalid'
+  return new Date(d.getTime() + 7 * 3_600_000).toISOString().slice(0, 10) === input ? d : 'invalid'
 }
 
 const DOMAIN_RE = /^(?=.{3,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/

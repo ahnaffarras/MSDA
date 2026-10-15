@@ -4,6 +4,7 @@ import { ReactNode, useCallback, useEffect, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { ThemeProvider, useTheme } from '@/contexts/ThemeContext'
 import { AuthProvider } from '@/contexts/AuthContext'
+import { NotificationsProvider } from '@/contexts/NotificationsContext'
 import Sidebar, { BrandMark } from '@/components/Sidebar'
 
 function ThemeIcon({ theme }: { theme: 'light' | 'dark' }) {
@@ -91,7 +92,13 @@ export default function ClientLayout({ children }: { children: ReactNode }) {
   const bare = pathname === '/login'
   return (
     <ThemeProvider>
-      <AuthProvider>{bare ? children : <Shell>{children}</Shell>}</AuthProvider>
+      <AuthProvider>
+        {bare ? children : (
+          <NotificationsProvider>
+            <Shell>{children}</Shell>
+          </NotificationsProvider>
+        )}
+      </AuthProvider>
     </ThemeProvider>
   )
 }

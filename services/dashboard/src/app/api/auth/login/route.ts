@@ -18,6 +18,7 @@ import {
   toPublicUser,
 } from '@/lib/auth'
 import { PASSWORD_MAX, SESSION_COOKIE } from '@/lib/auth-types'
+import { recordAudit } from '@/lib/audit'
 
 export const dynamic = 'force-dynamic'
 
@@ -55,6 +56,7 @@ export async function POST(request: Request) {
     const wait = Math.max(await lockedFor(uKey), await lockedFor(iKey))
     if (wait > 0) {
       const mins = Math.ceil(wait / 60)
+      await recordAudit({ action: 'auth.login_locked', request, actor: { username }, meta: { retry_after_s: wait } })
       return NextResponse.json(
         { error: `Too many failed attempts. Try again in ${mins} minute${mins === 1 ? '' : 's'}.`, retryAfter: wait },
         { status: 429, headers: { ...NO_STORE, 'Retry-After': String(wait) } },
@@ -68,6 +70,13 @@ export async function POST(request: Request) {
 
     if (!doc || !ok || !doc.is_active) {
       await Promise.all([recordUserFailure(uKey), recordIpFailure(iKey)])
+      // Hanya username berbentuk valid yang dicatat: orang kadang salah mengetik password di kolom username.
+      await recordAudit({
+        action: 'auth.login_failed',
+        request,
+        actor: { username },
+        meta: { reason: !doc ? 'unknown_user' : !ok ? 'bad_password' : 'inactive', username_format_valid: username !== null },
+      })
       return NextResponse.json({ error: BAD }, { status: 401, headers: NO_STORE })
     }
 
@@ -79,6 +88,8 @@ export async function POST(request: Request) {
       clearThrottle(uKey),
       users.updateOne({ _id: doc._id }, { $set: { last_login_at: new Date(), last_login_ip: ip } }),
     ])
+
+    await recordAudit({ action: 'auth.login', request, actor: { id: doc._id.toString(), username: doc.username } })
 
     const res = NextResponse.json({ user: toPublicUser(doc) }, { headers: NO_STORE })
     res.cookies.set({

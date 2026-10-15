@@ -3,6 +3,7 @@ import { ObjectId } from 'mongodb'
 import { guardAdmin } from '@/lib/admin'
 import { hashPassword, isDuplicateKey, normalizeUsername, toPublicUser, usersCol, type UserDoc } from '@/lib/auth'
 import { ROLES, USERNAME_HELP, validatePassword, type Role } from '@/lib/auth-types'
+import { actorOf, recordAudit } from '@/lib/audit'
 
 export const dynamic = 'force-dynamic'
 
@@ -73,6 +74,14 @@ export async function POST(request: Request) {
       last_login_ip: null,
     }
     await users.insertOne(doc)
+    await recordAudit({
+      action: 'user.create',
+      request,
+      actor: actorOf(guard.user),
+      targetType: 'user',
+      targetId: doc._id.toString(),
+      meta: { username, role },
+    })
     return NextResponse.json({ user: toPublicUser(doc) }, { status: 201, headers: NO_STORE })
   } catch (error) {
     if (isDuplicateKey(error)) {

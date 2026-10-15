@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
-import { destroySession, isSecureRequest, readSessionToken } from '@/lib/auth'
+import { authenticate, destroySession, isSecureRequest, readSessionToken } from '@/lib/auth'
+import { actorOf, recordAudit } from '@/lib/audit'
 import { SESSION_COOKIE } from '@/lib/auth-types'
 
 export const dynamic = 'force-dynamic'
@@ -7,7 +8,9 @@ export const dynamic = 'force-dynamic'
 /** POST /api/auth/logout — hapus sesi di server dan kosongkan cookie. */
 export async function POST(request: Request) {
   try {
+    const authed = await authenticate(request).catch(() => null) // sebelum sesi dihapus
     await destroySession(readSessionToken(request))
+    if (authed) await recordAudit({ action: 'auth.logout', request, actor: actorOf(authed) })
   } catch (error) {
     console.error('[auth logout]', error)
   }

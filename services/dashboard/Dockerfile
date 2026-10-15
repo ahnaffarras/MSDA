@@ -20,13 +20,6 @@ COPY . .
 
 # Dummy env agar build tidak error karena MONGODB_URI belum di-set
 ENV MONGODB_URI=mongodb://placeholder:27017/msda
-ENV NEXT_PUBLIC_BASE_URL=http://localhost:3000
-
-# Tujuan proxy /api-proxy/* (rewrites di next.config.ts) DIKUNCI saat `next build`,
-# bukan dibaca saat container berjalan. Tanpa ARG ini nilainya jatuh ke
-# http://localhost:8080 yang di dalam container dashboard tidak ada -> 500.
-ARG NEXT_PUBLIC_API_URL=http://backend:8080
-ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
 RUN npm run build
 
@@ -52,6 +45,10 @@ USER nextjs
 
 EXPOSE 3000
 ENV PORT=3000
+
+# Cek kesehatan: /api/health publik dan hanya mengembalikan status
+HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=5 \
+  CMD wget -qO- http://127.0.0.1:3000/api/health >/dev/null || exit 1
 ENV HOSTNAME=0.0.0.0
 
 CMD ["node", "server.js"]

@@ -1,18 +1,19 @@
 import { NextResponse } from 'next/server'
 import type { Document } from 'mongodb'
 import { getDb } from '@/lib/db'
-import { intParam, riskOf, sinceFilter } from '@/lib/query'
+import { rangeFilter, riskOf, sinceFilter } from '@/lib/query'
+import { resolveRange } from '@/lib/time-range'
+import { ipMaskerFor } from '@/lib/privacy-settings'
 import { FLAG_TYPE_LIST, WATCH_TYPE_LIST, type RiskLevel } from '@/lib/domain-risk'
 import {
   WIB_OFFSET_MS,
-  fillSeries,
-  rangeByHours,
+  fillSeriesRange,
   type AttentionDomain,
   type OverviewData,
 } from '@/lib/overview'
 
 /**
- * GET /api/overview?hours=24
+ * GET /api/overview?range=today|24h|7d|30d  atau  ?range=custom&from=YYYY-MM-DD&to=YYYY-MM-DD
  *
  * Satu panggilan untuk seluruh halaman Dashboard. Semua agregasi dikerjakan di MongoDB
  * (tidak ada ribuan event ditarik ke browser). Field dibaca toleran terhadap dua bentuk
@@ -40,13 +41,17 @@ const iso = (v: unknown): string | null => (v instanceof Date ? v.toISOString() 
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
-  const hours = intParam(searchParams.get('hours'), 24, 1, 168)
-  const range = rangeByHours(hours)
+  const range = resolveRange({
+    range: searchParams.get('range'),
+    from: searchParams.get('from'),
+    to: searchParams.get('to'),
+  })
 
   try {
     const db = await getDb()
+    const mask = await ipMaskerFor(request)
     const col = db.collection('ip_access_dns')
-    const win = sinceFilter(hours)
+    const win = rangeFilter(range.from, range.to)
     const within = (extra: Document) => ({ $and: [win, extra] })
 
     const [totalsRows, prevRows, activeNow, seriesRows, apRows, topRows, attnRows, clientRows, blActive, blTotal] =
@@ -67,8 +72,8 @@ export async function GET(request: Request) {
           { $project: { queries: 1, flagged: 1, watch: 1, last: 1, clients: { $size: '$clients' }, domains: { $size: '$domains' } } },
         ]).toArray(),
 
-        // total dua kali rentang; dikurangi rentang ini = periode sebelumnya
-        col.aggregate([{ $match: sinceFilter(hours * 2) }, { $group: { _id: null, queries: { $sum: qty } } }]).toArray(),
+        // periode pembanding: rentang sama panjang tepat sebelum rentang ini
+        col.aggregate([{ $match: rangeFilter(range.prevFrom, range.prevTo) }, { $group: { _id: null, queries: { $sum: qty } } }]).toArray(),
 
         col.distinct('client_ip', sinceFilter(10 / 60)),
 
@@ -165,7 +170,7 @@ export async function GET(request: Request) {
 
     const t = totalsRows[0] ?? { queries: 0, flagged: 0, watch: 0, clients: 0, domains: 0, last: null }
     const queries = t.queries ?? 0
-    const prevQueries = Math.max(0, (prevRows[0]?.queries ?? 0) - queries)
+    const prevQueries = prevRows[0]?.queries ?? 0
 
     const attention: AttentionDomain[] = attnRows
       .map(r => {
@@ -185,7 +190,10 @@ export async function GET(request: Request) {
       .slice(0, 8)
 
     const body: OverviewData = {
-      hours,
+      hours: range.hours,
+      range_key: range.key,
+      from: range.from.toISOString(),
+      to: range.to.toISOString(),
       bucket_ms: range.bucketMs,
       generated_at: new Date().toISOString(),
       last_event_at: iso(t.last),
@@ -198,11 +206,11 @@ export async function GET(request: Request) {
         domains: t.domains ?? 0,
         active_now: activeNow.filter(Boolean).length,
       },
-      series: fillSeries(
+      series: fillSeriesRange(
         seriesRows.filter(r => typeof r._id === 'number').map(r => ({ start: r._id as number, queries: r.queries, flagged: r.flagged })),
-        hours,
+        range.from.getTime(),
+        range.to.getTime(),
         range.bucketMs,
-        Date.now(),
       ),
       aps: apRows.map(r => ({
         ap_ip: String(r._id),
@@ -220,7 +228,7 @@ export async function GET(request: Request) {
       })),
       attention,
       risky_clients: clientRows.map(r => ({
-        client_ip: r._id.client,
+        client_ip: mask(r._id.client),
         ap_ip: r._id.ap ?? '',
         ap_label: r.ap_label ?? '',
         queries: r.queries,

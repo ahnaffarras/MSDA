@@ -1,13 +1,17 @@
 import { NextResponse } from 'next/server'
 import { getDb } from '@/lib/db'
-import { adminProtected, requireAdmin } from '@/lib/admin'
+import { adminProtected, guardAdmin } from '@/lib/admin'
+import { actorOf, recordAudit } from '@/lib/audit'
+import { addBlocklistEntries, isAllowlisted, loadAllowlist } from '@/lib/blocklist-db'
 import { sinceFilter } from '@/lib/query'
 import {
+  BLACKLIST_SOURCES,
   BLACKLIST_TYPES,
   isKnownType,
   matchesBlacklist,
-  normalizeDomain,
+  parseExpiry,
   type BlacklistEntry,
+  type BlacklistSource,
 } from '@/lib/blacklist'
 
 const iso = (v: unknown): string | null => {
@@ -23,7 +27,8 @@ const iso = (v: unknown): string | null => {
 export async function GET() {
   try {
     const db = await getDb()
-    const docs = await db.collection('dns_blacklist').find({}).sort({ type: 1, domain: 1 }).toArray()
+    const docs = await db.collection('dns_blacklist').find({}).sort({ type: 1, domain: 1 }).limit(20_000).toArray()
+    const allow = await loadAllowlist(db)
 
     // hits per domain (satu agregasi), lalu dicocokkan ke tiap entri termasuk subdomain
     const hitRows = await db
@@ -56,6 +61,10 @@ export async function GET() {
           created_at: iso(d.created_at) ?? iso(d.created),
           hits_7d: hits,
           last_hit: last,
+          expires_at: iso(d.expires_at),
+          source: typeof d.source === 'string' && d.source ? d.source : 'manual',
+          note: typeof d.note === 'string' ? d.note : '',
+          allowlisted: isAllowlisted(d.domain, allow),
         }
       })
 
@@ -76,8 +85,8 @@ export async function GET() {
  * Menambah satu atau beberapa domain sekaligus. Domain yang sudah ada dilewati.
  */
 export async function POST(request: Request) {
-  const denied = await requireAdmin(request)
-  if (denied) return denied
+  const guard = await guardAdmin(request)
+  if (guard.denied) return guard.denied
 
   let body: Record<string, unknown>
   try {
@@ -108,46 +117,32 @@ export async function POST(request: Request) {
 
   try {
     const db = await getDb()
-    const col = db.collection('dns_blacklist')
+    const parsedExpiry = parseExpiry(body.expires_at)
+    if (parsedExpiry === 'invalid') {
+      return NextResponse.json({ error: 'expires_at must be a date like 2026-12-31' }, { status: 400 })
+    }
+    if (parsedExpiry && parsedExpiry.getTime() <= Date.now()) {
+      return NextResponse.json({ error: 'expires_at must be in the future' }, { status: 400 })
+    }
+    const note = typeof body.note === 'string' ? body.note.trim() : ''
+    const source = BLACKLIST_SOURCES.includes(body.source as never) ? (body.source as BlacklistSource) : 'manual'
 
-    const created: string[] = []
-    const skipped: { input: string; reason: 'invalid' | 'exists' | 'duplicate_input' }[] = []
-    const seen = new Set<string>()
+    const { created, skipped } = await addBlocklistEntries(
+      db,
+      rawList.map(input => ({ input, type, group, description, note, expires_at: parsedExpiry, source })),
+    )
 
-    for (const input of rawList) {
-      const domain = normalizeDomain(input)
-      if (!domain) {
-        skipped.push({ input, reason: 'invalid' })
-        continue
-      }
-      if (seen.has(domain)) {
-        skipped.push({ input, reason: 'duplicate_input' })
-        continue
-      }
-      seen.add(domain)
-
-      const exists = await col.findOne({ domain })
-      if (exists) {
-        skipped.push({ input: domain, reason: 'exists' })
-        continue
-      }
-
-      const now = new Date()
-      await col.insertOne({
-        domain,
-        group,
-        type,
-        description,
-        blocked_level: 'domain',
-        is_active: true,
-        created_by: 'dashboard',
-        created_at: now,
-        updated_at: now,
+    if (created.length > 0) {
+      await recordAudit({
+        action: 'blacklist.create',
+        request,
+        actor: actorOf(guard.user),
+        targetType: 'blacklist',
+        meta: { count: created.length, domains: created.slice(0, 20), type, group },
       })
-      created.push(domain)
     }
 
-    const status = created.length > 0 ? 201 : skipped.some(s => s.reason === 'exists') ? 409 : 400
+    const status = created.length > 0 ? 201 : skipped.some(s => s.reason === 'exists' || s.reason === 'allowlisted') ? 409 : 400
     return NextResponse.json({ created, skipped }, { status })
   } catch (error) {
     console.error('[blacklist POST]', error)

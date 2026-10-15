@@ -3,7 +3,9 @@
 import { useState, use } from 'react'
 import { useLoad } from '@/lib/useLoad'
 import Link from 'next/link'
+import { Suspense } from 'react'
 import PageHeader from '@/components/PageHeader'
+import TrendsPanel from '@/components/TrendsPanel'
 import { formatDateTimeWIB, timeAgo } from '@/lib/format'
 import type { Group, Node, DnsEvent } from '@/lib/types'
 
@@ -167,7 +169,12 @@ export default function NetworkDetailPage({ params }: { params: Promise<{ id: st
       </PageHeader>
 
       {/* Nodes Grid */}
-      <div className="page-x py-6 md:py-8">
+      <div className="page-x py-6 md:py-8 space-y-6">
+        {/* Tren & heatmap jaringan ini (rentang global dari URL) */}
+        <Suspense fallback={null}>
+          <TrendsPanel title="Traffic over time" apIps={nodes.flatMap(n => (n.ap_ip || '').split(',').map(s => s.trim()).filter(Boolean))} />
+        </Suspense>
+
         {nodes.length === 0 ? (
           <div className="bg-surface rounded-xl border border-line p-12 text-center">
             <p className="text-chalk-faint mb-4">No nodes configured for this network</p>

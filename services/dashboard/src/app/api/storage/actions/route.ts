@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getDb } from '@/lib/db'
-import { requireAdmin } from '@/lib/admin'
+import { guardAdmin } from '@/lib/admin'
+import { actorOf, recordAudit } from '@/lib/audit'
 import {
   InputError,
   compactCollection,
@@ -40,9 +41,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'retentionDays must be a whole number.' }, { status: 400 })
   }
 
+  let actor: ReturnType<typeof actorOf> | null = null
   if (action !== 'preview') {
-    const denied = await requireAdmin(request)
-    if (denied) return denied
+    const guard = await guardAdmin(request)
+    if (guard.denied) return guard.denied
+    actor = actorOf(guard.user)
   }
 
   try {
@@ -60,15 +63,19 @@ export async function POST(request: Request) {
         mode: 'manual',
         ...(retentionDays !== null ? { retentionDays } : {}),
       })
+      await recordAudit({ action: 'storage.cleanup_run', request, actor, targetType: 'collection', targetId: collection, meta: { retentionDays, result } })
       return NextResponse.json(result)
     }
 
     if (action === 'compact') {
-      return NextResponse.json(await compactCollection(db, collection))
+      const compacted = await compactCollection(db, collection)
+      await recordAudit({ action: 'storage.compact', request, actor, targetType: 'collection', targetId: collection })
+      return NextResponse.json(compacted)
     }
 
     if (action === 'snapshot') {
       await recordSnapshot(db)
+      await recordAudit({ action: 'storage.snapshot', request, actor, targetType: 'storage' })
       return NextResponse.json({ ok: true })
     }
 

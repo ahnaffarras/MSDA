@@ -1,18 +1,20 @@
 'use client'
 
-import { useCallback, useMemo, useState, useEffect, useRef } from 'react'
+import { Suspense, useCallback, useMemo, useState } from 'react'
 import Link from 'next/link'
 import type { DnsEvent, Group, Node } from '@/lib/types'
 import { RiskBadge, RiskMark } from '@/components/Risk'
 import BlockDomainButton, { useBlocklist } from '@/components/BlockDomain'
-import PageHeader, { Segmented } from '@/components/PageHeader'
+import PageHeader from '@/components/PageHeader'
+import TimeRangePicker from '@/components/TimeRangePicker'
+import TrendsPanel from '@/components/TrendsPanel'
+import { useTimeRange } from '@/lib/useTimeRange'
+import { useClientLabels } from '@/lib/useClientLabels'
 import StorageCard from '@/components/StorageCard'
 import {
-  RANGES,
   bucketLabel,
   buildHeadline,
   percentChange,
-  rangeByHours,
   staleMinutes,
   type ApUsage,
   type OverviewData,
@@ -235,8 +237,8 @@ function Skeleton() {
 
 /* ───────────────────────────── halaman ───────────────────────────── */
 
-export default function HomePage() {
-  const [hours, setHours] = useState(24)
+function HomePageInner() {
+  const { params, query, resolved: range, setRange } = useTimeRange()
   const [data, setData] = useState<OverviewData | null>(null)
   const [events, setEvents] = useState<(DnsEvent & { _id?: string })[]>([])
   const [groups, setGroups] = useState<Group[]>([])
@@ -244,21 +246,17 @@ export default function HomePage() {
   const [failed, setFailed] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [now, setNow] = useState<number | null>(null)
-  const [wsStatus, setWsStatus] = useState<'connecting' | 'connected' | 'reconnecting' | 'disconnected'>('connecting')
 
-  const wsRef = useRef<WebSocket | null>(null)
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const retryCountRef = useRef(0)
   const blocklist = useBlocklist()
+  const riskyLabels = useClientLabels((data?.risky_clients ?? []).map(c => c.client_ip))
 
-  const range = rangeByHours(hours)
 
   const load = useCallback(async () => {
     try {
       setRefreshing(true)
       const [oRes, eRes, gRes, nRes] = await Promise.all([
-        fetch(`/api/overview?hours=${hours}`),
-        fetch(`/api/events?hours=${hours}&limit=12`),
+        fetch(`/api/overview?${query}`),
+        fetch(`/api/events?${query}&limit=12`),
         fetch('/api/groups'),
         fetch('/api/nodes'),
       ])
@@ -280,70 +278,14 @@ export default function HomePage() {
     } finally {
       setRefreshing(false)
     }
-  }, [hours])
+  }, [query])
 
   // Polling reguler setiap 8 detik agar data terus sinkron
-  useLoad(load, REFRESH_MS, hours)
+  useLoad(load, REFRESH_MS, query)
 
-  // Koneksi WebSocket ke backend (/ws/dashboard) untuk push realtime dari n8n/vector
-  useEffect(() => {
-    let unmounted = false
-
-    function connectWs() {
-      if (unmounted) return
-      setWsStatus(prev => (prev === 'connected' ? 'reconnecting' : 'connecting'))
-
-      try {
-        const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-        // Backend port 8081 diexpose ke host
-        const wsUrl = `${proto}//${window.location.hostname}:8081/ws/dashboard`
-        const ws = new WebSocket(wsUrl)
-        wsRef.current = ws
-
-        ws.onopen = () => {
-          if (unmounted) return
-          setWsStatus('connected')
-          retryCountRef.current = 0
-          // Saat berhasil terhubung, muat data terbaru
-          void load()
-        }
-
-        ws.onmessage = () => {
-          if (unmounted) return
-          // Saat ada broadcast webhook baru (misal blacklist_alert atau update)
-          void load()
-        }
-
-        ws.onerror = () => {
-          // onError akan memicu onclose
-        }
-
-        ws.onclose = () => {
-          if (unmounted) return
-          setWsStatus('reconnecting')
-          // Exponential backoff reconnect (maksimal 15s)
-          const delay = Math.min(15_000, 1000 * Math.pow(1.5, retryCountRef.current))
-          retryCountRef.current += 1
-          reconnectTimeoutRef.current = setTimeout(connectWs, delay)
-        }
-      } catch {
-        if (!unmounted) {
-          setWsStatus('disconnected')
-          reconnectTimeoutRef.current = setTimeout(connectWs, 5000)
-        }
-      }
-    }
-
-    connectWs()
-
-    return () => {
-      unmounted = true
-      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current)
-      if (wsRef.current) {
-        wsRef.current.close()
-      }
-    }
-  }, [load])
+  // Status "live" mengikuti hasil polling terakhir. Browser tidak lagi membuka WebSocket
+  // langsung ke backend (port backend tidak dipublikasikan; semua lewat proxy dashboard).
+  const wsStatus: 'connecting' | 'connected' | 'reconnecting' = failed ? 'reconnecting' : data ? 'connected' : 'connecting'
 
   const places = useMemo(() => {
     const byGroup = new Map(groups.map(g => [g.id, g.name]))
@@ -393,7 +335,7 @@ export default function HomePage() {
   if (!data || now === null) return <Skeleton />
 
   const t = data.totals
-  const headline = buildHeadline(data, range.label)
+  const headline = buildHeadline(data, range.phrase)
   const stale = staleMinutes(data.last_event_at, now)
   const change = percentChange(t.queries, t.prev_queries)
   const maxApQueries = Math.max(1, ...data.aps.map(a => a.queries))
@@ -411,7 +353,7 @@ export default function HomePage() {
           <span>no earlier period to compare</span>
         ) : (
           <span>
-            <span aria-hidden="true">{change >= 0 ? '↑' : '↓'}</span> {Math.abs(change)}% vs previous {range.label}
+            <span aria-hidden="true">{change >= 0 ? '↑' : '↓'}</span> {Math.abs(change)}% vs previous period
           </span>
         ),
     },
@@ -447,7 +389,7 @@ export default function HomePage() {
                   <span className="absolute inline-flex h-full w-full rounded-full bg-signal opacity-75 animate-ping" />
                   <span className="relative inline-flex h-3 w-3 rounded-full bg-signal" />
                 </span>
-                REALTIME
+                LIVE
               </span>
             ) : wsStatus === 'reconnecting' ? (
               <span className="inline-flex items-center gap-2 rounded-lg border-2 border-watch-border bg-watch-bg px-4 py-2 text-sm font-semibold text-watch shadow-sm">
@@ -471,12 +413,7 @@ export default function HomePage() {
         title="Network overview"
         description="Live DNS activity across every access point. Synchronized in realtime with backend."
         actions={
-          <Segmented
-            label="Time range"
-            value={hours}
-            onChange={setHours}
-            options={RANGES.map(r => ({ value: r.hours, label: r.short }))}
-          />
+          <TimeRangePicker params={params} onChange={setRange} />
         }
       >
         <div
@@ -534,7 +471,7 @@ export default function HomePage() {
         <StorageCard />
 
         {/* Komposisi risiko: pita tipis, bukan kartu tinggi, supaya tidak meninggalkan ruang kosong di kolom */}
-        <Panel title="Access composition" caption={`By risk level · last ${range.label}`}>
+        <Panel title="Access composition" caption={`By risk level · ${range.caption}`}>
           <Composition totals={t} />
         </Panel>
 
@@ -545,7 +482,7 @@ export default function HomePage() {
         <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_24rem] gap-5">
           <Panel
             title="To review"
-            caption={`Risky or flagged domains · last ${range.label}`}
+            caption={`Risky or flagged domains · ${range.caption}`}
             alert={data.attention.some(a => a.risk === 'flag')}
             className="xl:col-start-2 xl:row-start-1"
           >
@@ -668,9 +605,12 @@ export default function HomePage() {
           )}
         </Panel>
 
+        {/* Pola jam sibuk (heatmap jam × hari, WIB) untuk rentang yang dipilih */}
+        <TrendsPanel title="Busiest hours" showPicker={false} showChart={false} />
+
         {/* Baris 3: dua daftar sejajar, sama tinggi */}
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-          <Panel title="Top domains" caption={`Most requested · last ${range.label}`}>
+          <Panel title="Top domains" caption={`Most requested · ${range.caption}`}>
             {data.top_domains.length === 0 ? (
               <Empty>No domain data in this range yet.</Empty>
             ) : (
@@ -696,7 +636,7 @@ export default function HomePage() {
             )}
           </Panel>
 
-          <Panel title="Clients with most risky requests" caption={`Last ${range.label}`}>
+          <Panel title="Clients with most risky requests" caption={range.caption}>
             {data.risky_clients.length === 0 ? (
               <Empty ok>No clients accessed risky domains.</Empty>
             ) : (
@@ -707,6 +647,7 @@ export default function HomePage() {
                     <>
                       <span className="min-w-0 mr-auto">
                         <span className="block font-mono text-sm text-chalk">{c.client_ip}</span>
+                        {riskyLabels[c.client_ip] && <span className="block text-xs text-chalk-dim truncate">{riskyLabels[c.client_ip]}</span>}
                         <span className="block text-xs text-chalk-faint truncate">
                           {place ? `${place.groupName ? `${place.groupName} · ` : ''}${place.nodeName}` : c.ap_label || c.ap_ip}
                         </span>
@@ -778,5 +719,13 @@ export default function HomePage() {
         </Panel>
       </div>
     </div>
+  )
+}
+
+export default function HomePage() {
+  return (
+    <Suspense fallback={null}>
+      <HomePageInner />
+    </Suspense>
   )
 }

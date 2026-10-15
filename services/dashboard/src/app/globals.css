@@ -482,3 +482,29 @@ button:not(:disabled),
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ── Cetak / Simpan sebagai PDF (laporan) ───────────────────────────── */
+@media print {
+  aside,
+  .rail,
+  .no-print,
+  nav[aria-label="Breadcrumb"] {
+    display: none !important;
+  }
+  html,
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+  .page-x {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+  article,
+  section {
+    break-inside: avoid;
+  }
+  * {
+    box-shadow: none !important;
+  }
+}

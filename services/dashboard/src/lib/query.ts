@@ -18,6 +18,19 @@ export function sinceFilter(hours: number) {
   };
 }
 
+/**
+ * Filter waktu [from, to) — dasar rentang global (C1). Sama seperti sinceFilter,
+ * mencocokkan timestamp bertipe Date maupun string ISO.
+ */
+export function rangeFilter(from: Date, to: Date) {
+  return {
+    $or: [
+      { timestamp: { $gte: from, $lt: to } },
+      { timestamp: { $gte: from.toISOString(), $lt: to.toISOString() } },
+    ],
+  };
+}
+
 /** Parse angka query-string dengan batas aman. */
 export function intParam(value: string | null, fallback: number, min: number, max: number) {
   const n = parseInt(value ?? "", 10);

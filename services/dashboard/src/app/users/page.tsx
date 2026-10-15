@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import PageHeader from '@/components/PageHeader'
+import PrivacyCard from '@/components/PrivacyCard'
 import { useAuth } from '@/contexts/AuthContext'
 import { adminFetch } from '@/lib/admin-client'
 import {
@@ -352,6 +353,7 @@ export default function UsersPage() {
       />
 
       <div className="page-x py-6 md:py-8 space-y-4">
+        <PrivacyCard />
         {notice && (
           <p role="status" className="flex items-start justify-between gap-3 rounded-lg border border-safe-border bg-safe-bg px-3.5 py-2.5 text-sm text-safe">
             <span>{notice}</span>

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { adminFetch } from '@/lib/admin-client'
-import { BLACKLIST_TYPES, isKnownType, matchesBlacklist, type BlacklistEntry } from '@/lib/blacklist'
+import { BLACKLIST_TYPES, isEffective, isKnownType, matchesBlacklist, type BlacklistEntry } from '@/lib/blacklist'
 import { useLoad } from '@/lib/useLoad'
 
 /** Daftar blokir aktif, untuk menandai domain yang sudah diblokir di halaman lain. */
@@ -24,7 +24,7 @@ export function useBlocklist() {
 
   /** Entri aktif yang memblokir domain ini (domain sama atau induknya), kalau ada. */
   const find = useCallback(
-    (domain: string) => entries.find(e => e.is_active && matchesBlacklist(domain, e.domain)),
+    (domain: string) => entries.find(e => isEffective(e) && matchesBlacklist(domain, e.domain)),
     [entries],
   )
   return { entries, find, reload }

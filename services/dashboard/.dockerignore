@@ -1,0 +1,14 @@
+node_modules
+.next
+out
+coverage
+*.backup
+*.backup-*
+*.tsbuildinfo
+tsconfig.tsbuildinfo
+.env
+.env.*
+npm-debug.log*
+.git
+*.md
+!README.md

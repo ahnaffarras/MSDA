@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useTheme } from '@/contexts/ThemeContext'
 import { useAuth } from '@/contexts/AuthContext'
+import { useNotifications } from '@/contexts/NotificationsContext'
 import { ROLE_LABEL } from '@/lib/auth-types'
 import type { Group, Node } from '@/lib/types'
 
@@ -28,6 +29,7 @@ const icons = {
   sun: 'M12 8a4 4 0 100 8 4 4 0 000-8zM12 2v2m0 16v2M4.9 4.900l1.4 1.400m11.4 11.400l1.4 1.400M2 12h2m16 0h2M4.9 19.100l1.4-1.400M17.7 6.300l1.4-1.4',
   users: 'M16 19v-1a4 4 0 00-4-4H7a4 4 0 00-4 4v1M9.5 10a3 3 0 100-6 3 3 0 000 6zM17 11l2 2 3-3.500',
   logout: 'M15 4h3a2 2 0 012 2v12a2 2 0 01-2 2h-3M10 8l-4 4 4 4M6 12h11',
+  audit: 'M9 12l2 2 4-4M7 3h10a2 2 0 012 2v14a2 2 0 01-2 2H7a2 2 0 01-2-2V5a2 2 0 012-2z',
   moon: 'M20.350 15.350A9 9 0 018.650 3.650 9 9 0 1020.350 15.350z',
 }
 
@@ -60,6 +62,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
   const pathname = usePathname()
   const { theme, toggleTheme } = useTheme()
   const { user, isAdmin, logout } = useAuth()
+  const { unread, critical } = useNotifications()
   const [collapsed, setCollapsed] = useState(false)
   const [groups, setGroups] = useState<Group[]>([])
   const [nodes, setNodes] = useState<Node[]>([])
@@ -88,9 +91,9 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
   // `collapsed` hanya berlaku di desktop; drawer mobile selalu menampilkan label penuh
   const hideLabel = collapsed ? 'lg:hidden' : ''
 
-  const itemClass = `rail-link flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium ${collapsed ? 'lg:justify-center' : ''}`
+  const itemClass = `rail-link relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium ${collapsed ? 'lg:justify-center' : ''}`
 
-  const navLink = ({ href, label, icon, active, title }: { href: string; label: string; icon: string; active: boolean; title?: string }) => (
+  const navLink = ({ href, label, icon, active, title, badge, badgeCritical }: { href: string; label: string; icon: string; active: boolean; title?: string; badge?: number; badgeCritical?: boolean }) => (
     <Link
       href={href}
       onClick={onClose}
@@ -101,6 +104,18 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
     >
       <Icon d={icon} />
       <span className={`truncate ${hideLabel}`}>{label}</span>
+      {badge ? (
+        <>
+          <span
+            className={`ml-auto min-w-5 h-5 px-1.5 rounded-full text-[11px] font-semibold grid place-items-center text-white ${badgeCritical ? 'bg-flag' : 'bg-primary'} ${hideLabel}`}
+            aria-label={`${badge} unread`}
+          >
+            {badge > 99 ? '99+' : badge}
+          </span>
+          {/* Sidebar diciutkan: hanya titik penanda */}
+          <span className={`hidden ${collapsed ? 'lg:block' : ''} absolute top-1.5 right-2 w-2 h-2 rounded-full ${badgeCritical ? 'bg-flag' : 'bg-primary'}`} aria-hidden="true" />
+        </>
+      ) : null}
     </Link>
   )
 
@@ -224,7 +239,9 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
 
           {sectionLabel('DNS analysis')}
           <div className="space-y-0.5">
+            {navLink({ href: "/live",  label: "Live Feed",  icon: icons.intel,  active: isActive('/live') })}
             {navLink({ href: "/dns-intelligence",  label: "DNS Intelligence",  icon: icons.intel,  active: isActive('/dns-intelligence') })}
+            {navLink({ href: "/clients",  label: "Clients",  icon: icons.client,  active: isActive('/clients') })}
             {navLink({ href: "/client-access",  label: "Client Access",  icon: icons.client,  active: isActive('/client-access') })}
             {navLink({ href: "/dns-info",  label: "Domain Info",  icon: icons.info,  active: isActive('/dns-info') })}
             {navLink({ href: "/blacklist",  label: "Blocklist",  icon: icons.block,  active: isActive('/blacklist') })}
@@ -233,13 +250,14 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
           {sectionLabel('Reports')}
           <div className="space-y-0.5">
             {navLink({ href: "/reports",  label: "Daily Reports",  icon: icons.report,  active: isActive('/reports') })}
-            {navLink({ href: "/notifications",  label: "Notifications",  icon: icons.bell,  active: isActive('/notifications') })}
+            {navLink({ href: "/notifications",  label: "Notifications",  icon: icons.bell,  active: pathname === '/notifications' || pathname.startsWith('/notifications/'), badge: unread, badgeCritical: critical > 0 })}
           </div>
 
           {sectionLabel('System')}
           <div className="space-y-0.5">
             {navLink({ href: "/storage",  label: "Storage & Cleanup",  icon: icons.storage,  active: isActive('/storage') })}
             {isAdmin && navLink({ href: "/users",  label: "Users & Access",  icon: icons.users,  active: isActive('/users') })}
+            {isAdmin && navLink({ href: "/audit",  label: "Audit Log",  icon: icons.audit,  active: isActive('/audit') })}
           </div>
         </nav>
 

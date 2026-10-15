@@ -1,12 +1,16 @@
 'use client'
 
-import { useCallback, useMemo, useState } from 'react'
+import { Suspense, useCallback, useMemo, useState } from 'react'
 import Link from 'next/link'
 import ReportText from '@/components/ReportText'
 import { RiskBadge, asRisk } from '@/components/Risk'
 import { formatDateTimeWIB } from '@/lib/format'
 import { useLoad } from '@/lib/useLoad'
 import PageHeader from '@/components/PageHeader'
+import TimeRangePicker from '@/components/TimeRangePicker'
+import WeeklyReport from '@/components/WeeklyReport'
+import { useTimeRange } from '@/lib/useTimeRange'
+import { rangeQuery } from '@/lib/time-range'
 
 interface Report {
   _id: string
@@ -46,7 +50,7 @@ function parseRows(raw: string): Row[] {
 
 const num = (n: number) => n.toLocaleString('en-GB')
 
-export default function ReportsPage() {
+function DailyView({ query, header }: { query: string; header: React.ReactNode }) {
   const [reports, setReports] = useState<Report[]>([])
   const [loading, setLoading] = useState(true)
   const [failed, setFailed] = useState(false)
@@ -54,7 +58,7 @@ export default function ReportsPage() {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch('/api/reports')
+      const res = await fetch(`/api/reports?${query}`)
       const data = await res.json()
       if (!res.ok || !Array.isArray(data)) throw new Error('bad response')
       setReports(data)
@@ -65,8 +69,8 @@ export default function ReportsPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
-  useLoad(load)
+  }, [query])
+  useLoad(load, undefined, query)
 
   const selected = reports.find(r => r._id === selectedId) ?? reports[0] ?? null
   const previous = selected ? reports[reports.indexOf(selected) + 1] ?? null : null
@@ -117,11 +121,7 @@ export default function ReportsPage() {
 
   return (
     <div>
-      <PageHeader
-        crumbs={[{ label: 'Dashboard', href: '/' }, { label: 'Daily Reports' }]}
-        title="Daily Reports"
-        description="Daily DNS traffic summaries written by AI every night through the n8n workflow."
-      />
+      {header}
 
       {failed ? (
         <div className="page-x py-12 md:py-20">
@@ -155,7 +155,7 @@ export default function ReportsPage() {
       ) : (
         <div className="page-x py-5 md:py-8 grid grid-cols-1 lg:grid-cols-[14rem_minmax(0,1fr)] gap-6">
           {/* Pick a date */}
-          <nav aria-label="Choose a report" className="min-w-0">
+          <nav aria-label="Choose a report" className="no-print min-w-0">
             <label className="lg:hidden block">
               <span className="text-sm text-chalk-dim">Report date</span>
               <select
@@ -296,5 +296,61 @@ export default function ReportsPage() {
         </div>
       )}
     </div>
+  )
+}
+
+function ReportsInner() {
+  const { params, setRange } = useTimeRange()
+  const [view, setView] = useState<'daily' | 'weekly'>('daily')
+  // Laporan harian: tanpa pilihan di URL, tampilkan 30 hari terakhir (bukan 24 jam)
+  const effective = params.range ? params : { range: '30d' }
+  const query = rangeQuery(effective)
+
+  const header = (
+    <PageHeader
+      crumbs={[{ label: 'Dashboard', href: '/' }, { label: 'Reports' }]}
+      title="Reports"
+      description={
+        view === 'daily'
+          ? 'Daily DNS traffic summaries written by AI every night through the n8n workflow.'
+          : 'A real-data summary of one week, compared with the week before.'
+      }
+      actions={
+        <div className="no-print flex flex-wrap items-start justify-end gap-3">
+          <div role="group" aria-label="Report type" className="seg">
+            <button type="button" className="seg-btn" aria-pressed={view === 'daily'} onClick={() => setView('daily')}>Daily</button>
+            <button type="button" className="seg-btn" aria-pressed={view === 'weekly'} onClick={() => setView('weekly')}>Weekly</button>
+          </div>
+          {view === 'daily' && <TimeRangePicker params={effective} presets={['7d', '30d']} fallback="30d" onChange={setRange} />}
+          {view === 'daily' && (
+            <a href={`/api/reports/export?${query}`} className="btn" download>
+              Export CSV
+            </a>
+          )}
+          <button type="button" className="btn" onClick={() => window.print()} title="Opens the print dialog; choose “Save as PDF” to get a PDF">
+            Print / PDF
+          </button>
+        </div>
+      }
+    />
+  )
+
+  return view === 'daily' ? (
+    <DailyView query={query} header={header} />
+  ) : (
+    <div className="min-h-screen bg-background pb-12">
+      {header}
+      <div className="page-x py-5 md:py-8">
+        <WeeklyReport />
+      </div>
+    </div>
+  )
+}
+
+export default function ReportsPage() {
+  return (
+    <Suspense fallback={null}>
+      <ReportsInner />
+    </Suspense>
   )
 }

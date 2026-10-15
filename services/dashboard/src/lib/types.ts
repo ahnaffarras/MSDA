@@ -79,12 +79,32 @@ export interface APInfo {
 }
 
 // ── notifications (webhook from n8n) ────────────────────────────────────────
+export type NotificationType = "blacklist_alert" | "batch_summary" | "anomaly_alert" | "system_alert";
+export type NotificationSeverity = "info" | "warning" | "critical";
+export type NotificationStatus = "new" | "acknowledged" | "resolved";
+
 export interface NotificationItem {
   id:        string;
-  type_send: "blacklist_alert" | "batch_summary";
+  type_send: NotificationType;
   data:      NotificationData;
   is_read:   boolean;
   timestamp: string;
+  // Field B1 — backend selalu mengisi severity/status (default untuk data lama)
+  severity:     NotificationSeverity;
+  status:       NotificationStatus;
+  dedup_key?:   string;
+  ack_by?:      string;
+  ack_at?:      string;
+  resolved_at?: string;
+  note?:        string;
+}
+
+/** Ringkasan untuk badge sidebar (GET /notifications/unread-count). */
+export interface NotificationCounts {
+  unread:    number;
+  critical:  number;
+  latest_id: string;
+  latest_at: string | null;
 }
 
 export interface NotificationData {

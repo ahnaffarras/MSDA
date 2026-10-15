@@ -1,44 +1,52 @@
 /**
- * MSDA Dashboard — API client
+ * MSDA Dashboard — API client untuk backend Go (msda-backend).
  *
- * Semua fetch diarahkan ke Go backend API (msda-backend).
- * - Server Component / Node.js → NEXT_PUBLIC_API_URL (e.g. http://backend:8080)
- * - Browser                    → /api-proxy/* (Next.js rewrites → Go backend)
+ * - Browser → /api-proxy/* (route handler Next.js: memverifikasi sesi login, lalu
+ *   meneruskan ke backend dengan X-Internal-Token). Backend tidak pernah dipanggil
+ *   langsung dari browser.
+ * - Server → MSDA_BACKEND_URL dengan MSDA_INTERNAL_TOKEN.
  */
 
+import { redirectToLogin } from "./admin-client";
 import type {
   DashboardSummary, TopDomain, TopClient, LabGridAP,
   DNSInfo, DNSBlacklist, ClientAccessLog, ClientAccessStats,
-  NotificationItem, AIReport, PaginatedResponse, LabSeat,
+  NotificationItem, NotificationCounts, NotificationStatus, NotificationSeverity, NotificationType, AIReport, PaginatedResponse, LabSeat,
 } from "./types";
 
 // ─────────────────────────────────────────── Base URL resolution ──────────────
 
 function apiBase(): string {
+  // Server (jarang dipakai): langsung ke backend dengan token internal.
   if (typeof window === "undefined") {
-    return (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080") + "/api/v1";
+    return (process.env.MSDA_BACKEND_URL ?? "http://localhost:8080") + "/api/v1";
   }
+  // Browser: selalu lewat proxy dashboard yang memverifikasi sesi login.
   return "/api-proxy/v1";
 }
 
-function getToken(): string {
-  if (typeof window !== "undefined") {
-    return localStorage.getItem("msda_token") || "";
-  }
-  return "";
-}
-
-function authHeaders(): Record<string, string> {
-  const t = getToken();
-  return t ? { Authorization: `Bearer ${t}` } : {};
-}
-
-async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
+async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   const url = `${apiBase()}${path}`;
-  const res = await fetch(url, { cache: "no-store", ...options });
+  const headers = new Headers(options.headers);
+  if (typeof window === "undefined") {
+    const token = process.env.MSDA_INTERNAL_TOKEN;
+    if (token) headers.set("X-Internal-Token", token);
+  } else {
+    headers.set("accept", "application/json");
+    if (options.body && !headers.has("content-type")) headers.set("content-type", "application/json");
+  }
+  const res = await fetch(url, { cache: "no-store", credentials: "same-origin", ...options, headers });
+  if (res.status === 401 && typeof window !== "undefined") {
+    redirectToLogin(); // sesi habis → kembali ke halaman login
+  }
   if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`[MSDA API] ${path} → ${res.status}: ${body}`);
+    // Pesan error diambil dari JSON bila ada; detail mentah tidak ditampilkan ke pengguna
+    let message = `Request failed (${res.status})`;
+    try {
+      const j = (await res.json()) as { error?: string };
+      if (j?.error) message = j.error;
+    } catch { /* bukan JSON */ }
+    throw new Error(message);
   }
   return res.json() as Promise<T>;
 }
@@ -114,9 +122,7 @@ export async function fetchBlacklist(opts: {
   if (opts.search) params.set("search", opts.search);
   if (opts.page)   params.set("page",   String(opts.page));
   if (opts.limit)  params.set("limit",  String(opts.limit));
-  return apiFetch<PaginatedResponse<DNSBlacklist>>(`/blacklist?${params}`, {
-    headers: authHeaders(),
-  });
+  return apiFetch<PaginatedResponse<DNSBlacklist>>(`/blacklist?${params}`);
 }
 
 export async function createBlacklist(body: {
@@ -124,7 +130,6 @@ export async function createBlacklist(body: {
 }): Promise<DNSBlacklist> {
   const res = await apiFetch<{ data: DNSBlacklist }>("/blacklist", {
     method: "POST",
-    headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify(body),
   });
   return res.data;
@@ -133,7 +138,6 @@ export async function createBlacklist(body: {
 export async function updateBlacklist(id: string, body: Partial<DNSBlacklist>): Promise<DNSBlacklist> {
   const res = await apiFetch<{ data: DNSBlacklist }>(`/blacklist/${id}`, {
     method: "PUT",
-    headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify(body),
   });
   return res.data;
@@ -142,7 +146,6 @@ export async function updateBlacklist(id: string, body: Partial<DNSBlacklist>): 
 export async function toggleBlacklist(id: string): Promise<DNSBlacklist> {
   const res = await apiFetch<{ data: DNSBlacklist }>(`/blacklist/${id}/toggle-active`, {
     method: "PATCH",
-    headers: authHeaders(),
   });
   return res.data;
 }
@@ -150,7 +153,6 @@ export async function toggleBlacklist(id: string): Promise<DNSBlacklist> {
 export async function deleteBlacklist(id: string): Promise<void> {
   await apiFetch(`/blacklist/${id}`, {
     method: "DELETE",
-    headers: authHeaders(),
   });
 }
 
@@ -176,12 +178,46 @@ export function clientAccessExportUrl(range = "today"): string {
 
 // ─────────────────────────────────────────── Notifications ───────────────────
 
-export async function fetchNotifications(page = 1, limit = 20): Promise<PaginatedResponse<NotificationItem>> {
-  return apiFetch<PaginatedResponse<NotificationItem>>(`/notifications?page=${page}&limit=${limit}`);
+export interface NotificationQuery {
+  page?: number;
+  limit?: number;
+  status?: NotificationStatus | "";
+  severity?: NotificationSeverity | "";
+  type_send?: NotificationType | "";
+  from?: string; // ISO 8601
+  to?: string;   // ISO 8601
+  q?: string;
 }
 
-export async function markNotificationRead(id: string): Promise<void> {
-  await apiFetch(`/notifications/${id}/read`, { method: "PATCH" });
+export async function fetchNotifications(query: NotificationQuery = {}): Promise<PaginatedResponse<NotificationItem>> {
+  const params = new URLSearchParams();
+  params.set("page", String(query.page ?? 1));
+  params.set("limit", String(query.limit ?? 20));
+  for (const k of ["status", "severity", "type_send", "from", "to", "q"] as const) {
+    const v = query[k];
+    if (v) params.set(k, v);
+  }
+  return apiFetch<PaginatedResponse<NotificationItem>>(`/notifications?${params}`);
+}
+
+export async function fetchUnreadSummary(): Promise<NotificationCounts> {
+  const res = await apiFetch<{ data: NotificationCounts }>("/notifications/unread-count");
+  return res.data;
+}
+
+export async function setNotificationStatus(id: string, status: NotificationStatus, note = ""): Promise<void> {
+  await apiFetch(`/notifications/${encodeURIComponent(id)}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({ status, note }),
+  });
+}
+
+export async function bulkSetNotificationStatus(ids: string[], status: NotificationStatus, note = ""): Promise<number> {
+  const res = await apiFetch<{ data: { updated: number } }>("/notifications/bulk-status", {
+    method: "POST",
+    body: JSON.stringify({ ids, status, note }),
+  });
+  return res.data.updated;
 }
 
 export async function markAllNotificationsRead(): Promise<void> {
@@ -192,30 +228,6 @@ export async function markAllNotificationsRead(): Promise<void> {
 
 export async function fetchReports(page = 1, limit = 10): Promise<PaginatedResponse<AIReport>> {
   return apiFetch<PaginatedResponse<AIReport>>(`/reports?page=${page}&limit=${limit}`);
-}
-
-// ─────────────────────────────────────────── Auth ────────────────────────────
-
-export async function login(username: string, password: string): Promise<{ token: string }> {
-  const res = await apiFetch<{ data: { token: string } }>("/auth/login", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username, password }),
-  });
-  if (typeof window !== "undefined") {
-    localStorage.setItem("msda_token", res.data.token);
-  }
-  return res.data;
-}
-
-export function logout(): void {
-  if (typeof window !== "undefined") {
-    localStorage.removeItem("msda_token");
-  }
-}
-
-export function isLoggedIn(): boolean {
-  return typeof window !== "undefined" && !!localStorage.getItem("msda_token");
 }
 
 // ─────────────────────────────────────────── Static seat map ─────────────────

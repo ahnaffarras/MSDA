@@ -9,7 +9,9 @@ import BlockDomainButton, { useBlocklist } from '@/components/BlockDomain'
 import { formatDateTimeWIB, timeAgo } from '@/lib/format'
 import { sortByIp } from '@/lib/ip'
 import { useLoad } from '@/lib/useLoad'
-import PageHeader, { Segmented } from '@/components/PageHeader'
+import PageHeader from '@/components/PageHeader'
+import TimeRangePicker from '@/components/TimeRangePicker'
+import { useTimeRange } from '@/lib/useTimeRange'
 
 /** Bentuk respons /api/dns-info (hasil analisis AI yang disimpan n8n) */
 interface DomainInfo {
@@ -57,7 +59,6 @@ interface ApPlace {
   groupName: string
 }
 
-const HOURS = [1, 6, 12, 24, 48]
 const RISK_FILTERS = [
   { value: 'all', label: 'All' },
   { value: 'safe', label: 'Normal' },
@@ -136,7 +137,7 @@ function DnsIntelligenceContent() {
   const [events, setEvents] = useState<LoggedEvent[]>([])
   const [places, setPlaces] = useState<Record<string, ApPlace>>({})
   const [loading, setLoading] = useState(true)
-  const [timeFilter, setTimeFilter] = useState(24)
+  const { params: rangeParams, query: rangeQ, setRange } = useTimeRange()
   const [searchQuery, setSearchQuery] = useState(domainParam ?? '')
   const [riskFilter, setRiskFilter] = useState('all')
   const [visible, setVisible] = useState(PAGE_SIZE)
@@ -149,7 +150,7 @@ function DnsIntelligenceContent() {
 
   const loadEvents = useCallback(async () => {
     try {
-      const res = await fetch(`/api/events?hours=${timeFilter}&limit=10000`)
+      const res = await fetch(`/api/events?${rangeQ}&limit=10000`)
       if (res.ok) {
         const data = await res.json()
         setEvents(Array.isArray(data) ? data : data.data || [])
@@ -160,8 +161,8 @@ function DnsIntelligenceContent() {
     } finally {
       setLoading(false)
     }
-  }, [timeFilter])
-  useLoad(loadEvents, 60_000, timeFilter)
+  }, [rangeQ])
+  useLoad(loadEvents, 60_000, rangeQ)
 
   // Peta AP → kelas/node, supaya "diakses di AP mana" bisa diklik ke halaman AP-nya
   const loadPlaces = useCallback(async () => {
@@ -243,12 +244,7 @@ function DnsIntelligenceContent() {
         title="DNS Intelligence"
         description="Which domains are requested, from which AP, and by which client."
         actions={
-          <Segmented
-            label="Time range"
-            value={timeFilter}
-            onChange={h => { setTimeFilter(h); setVisible(PAGE_SIZE) }}
-            options={HOURS.map(h => ({ value: h, label: `${h}h` }))}
-          />
+          <TimeRangePicker params={rangeParams} onChange={r => { setRange(r); setVisible(PAGE_SIZE) }} />
         }
       >
         <dl className="mt-5 flex flex-wrap gap-x-10 gap-y-3">

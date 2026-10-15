@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getDb } from '@/lib/db'
-import { requireAdmin } from '@/lib/admin'
+import { guardAdmin } from '@/lib/admin'
+import { actorOf, recordAudit } from '@/lib/audit'
 import { parseSettingsPatch } from '@/lib/storage-config'
 import { getOverview, saveSettings } from '@/lib/storage-service'
 
@@ -12,8 +13,8 @@ export const dynamic = 'force-dynamic'
  * Hanya koleksi di daftar CLEANABLE yang diterima; nilai di luar batas ditolak (400).
  */
 export async function PUT(request: Request) {
-  const denied = await requireAdmin(request)
-  if (denied) return denied
+  const guard = await guardAdmin(request)
+  if (guard.denied) return guard.denied
 
   let body: unknown
   try {
@@ -29,6 +30,7 @@ export async function PUT(request: Request) {
     const db = await getDb()
     const saved = await saveSettings(db, parsed.value)
     if (!saved.ok) return NextResponse.json({ error: saved.error }, { status: 400 })
+    await recordAudit({ action: 'storage.settings_update', request, actor: actorOf(guard.user), targetType: 'storage', meta: { patch: parsed.value } })
     return NextResponse.json(await getOverview(db))
   } catch (error) {
     console.error('Failed to save storage settings:', error)

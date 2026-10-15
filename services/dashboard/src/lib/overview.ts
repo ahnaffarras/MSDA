@@ -71,6 +71,10 @@ export interface RiskyClient {
 
 export interface OverviewData {
   hours: number
+  /** rentang yang dipakai server (C1) */
+  range_key?: string
+  from?: string
+  to?: string
   bucket_ms: number
   generated_at: string
   last_event_at: string | null
@@ -113,6 +117,28 @@ export function fillSeries(
   return out
 }
 
+/**
+ * Seperti fillSeries tetapi untuk rentang [from, to] sembarang (C1). Dibatasi 400 batang
+ * agar respons tetap kecil.
+ */
+export function fillSeriesRange(
+  rows: { start: number; queries: number; flagged: number }[],
+  fromMs: number,
+  toMs: number,
+  bucketMs: number,
+): SeriesPoint[] {
+  const align = (ms: number) => Math.floor((ms + WIB_OFFSET_MS) / bucketMs) * bucketMs - WIB_OFFSET_MS
+  const first = align(fromMs)
+  const last = align(Math.max(fromMs, toMs - 1))
+  const byStart = new Map(rows.map(r => [r.start, r]))
+  const out: SeriesPoint[] = []
+  for (let start = first; start <= last && out.length < 400; start += bucketMs) {
+    const hit = byStart.get(start)
+    out.push({ start: new Date(start).toISOString(), queries: hit?.queries ?? 0, flagged: hit?.flagged ?? 0 })
+  }
+  return out
+}
+
 /** Label sumbu-X dalam WIB: jam untuk bucket < 1 hari, tanggal untuk harian. */
 export function bucketLabel(startIso: string, bucketMs: number): string {
   const d = new Date(startIso)
@@ -131,13 +157,13 @@ export interface Headline {
 const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString('en-GB')} ${n === 1 ? one : many}`
 
 /** Ringkasan satu kalimat "bagaimana kondisi jaringan sekarang" untuk bagian atas dashboard. */
-export function buildHeadline(d: OverviewData, rangeLabel: string): Headline {
+export function buildHeadline(d: OverviewData, rangePhrase: string): Headline {
   const t = d.totals
   if (t.queries === 0) {
     return {
       tone: 'idle',
       title: 'No data received yet',
-      detail: `There were no DNS queries in the last ${rangeLabel}. Check the MikroTik logs and the n8n workflow.`,
+      detail: `There were no DNS queries ${rangePhrase}. Check the MikroTik logs and the n8n workflow.`,
     }
   }
   if (t.flagged > 0) {
@@ -159,13 +185,13 @@ export function buildHeadline(d: OverviewData, rangeLabel: string): Headline {
     return {
       tone: 'watch',
       title: 'No risky access',
-      detail: `${plural(t.watch, 'request')} to social media, streaming or gaming in the last ${rangeLabel}.`,
+      detail: `${plural(t.watch, 'request')} to social media, streaming or gaming ${rangePhrase}.`,
     }
   }
   return {
     tone: 'safe',
     title: 'All activity looks normal',
-    detail: `${plural(t.queries, 'query', 'queries')} from ${plural(t.clients, 'client')} in the last ${rangeLabel}, none risky.`,
+    detail: `${plural(t.queries, 'query', 'queries')} from ${plural(t.clients, 'client')} ${rangePhrase}, none risky.`,
   }
 }
 

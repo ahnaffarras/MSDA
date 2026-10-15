@@ -12,7 +12,8 @@ import { validateSessionToken } from '@/lib/auth'
  *   (perlindungan CSRF tambahan di atas SameSite=Lax).
  */
 
-const PUBLIC_PATHS = new Set(['/login', '/api/auth/login', '/api/auth/logout'])
+const PUBLIC_PATHS = new Set(['/login', '/api/auth/login', '/api/auth/logout', '/api/health'])
+const ADMIN_PAGES = ['/users', '/audit']
 const UNSAFE = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 const isApi = (p: string) => p === '/api' || p.startsWith('/api/') || p.startsWith('/api-proxy/')
 
@@ -82,8 +83,8 @@ export async function proxy(request: NextRequest) {
     return res
   }
 
-  // Halaman manajemen pengguna hanya untuk administrator
-  if ((pathname === '/users' || pathname.startsWith('/users/')) && authed.user.role !== 'admin') {
+  // Halaman manajemen pengguna & audit log hanya untuk administrator
+  if (ADMIN_PAGES.some(p => pathname === p || pathname.startsWith(`${p}/`)) && authed.user.role !== 'admin') {
     return NextResponse.redirect(new URL('/', request.url))
   }
 

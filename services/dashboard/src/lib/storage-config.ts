@@ -122,6 +122,17 @@ export const CLEANABLE: CleanableDef[] = [
     defaultIntervalDays: 7,
   },
   {
+    name: 'audit_logs',
+    label: 'Audit log',
+    description: 'Who did what in the dashboard: sign-ins, user changes, blocklist and settings edits.',
+    timeField: 'ts',
+    kind: 'time',
+    defaultRetentionDays: 180,
+    minRetentionDays: 30,
+    defaultIntervalDays: 7,
+    caution: 'This is the security trail of the dashboard. Retention shorter than 30 days is not allowed.',
+  },
+  {
     name: 'dns_events',
     label: 'Legacy DNS events',
     description: 'Older event log from a previous workflow version. Not written by the current workflow.',
@@ -148,6 +159,12 @@ export const CLEANABLE: CleanableDef[] = [
 /** Konfigurasi dan master data: TIDAK PERNAH dibersihkan oleh fitur ini. */
 export const PROTECTED_COLLECTIONS: string[] = [
   'admins',
+  'dashboard_users',
+  'dashboard_sessions',
+  'dashboard_login_throttle',
+  'notification_settings',
+  'client_devices',
+  'dns_allowlist',
   'dns_blacklist',
   'blacklist',
   'groups',

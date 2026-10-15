@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
+import { ipMaskerFor } from "@/lib/privacy-settings";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const limit = parseInt(searchParams.get("limit") || "200");
+  // Dibatasi 1–1000 agar permintaan tak bisa menarik seluruh koleksi
+  const limit = Math.min(1000, Math.max(1, parseInt(searchParams.get("limit") || "200", 10) || 200));
 
   try {
     const db = await getDb();
+    const mask = await ipMaskerFor(request);
 
     // Pastikan hanya dokumen valid (punya domain) dan diurutkan terbaru (_id: -1)
     const logs = await db
@@ -16,7 +19,7 @@ export async function GET(request: Request) {
       .limit(limit)
       .toArray();
 
-    return NextResponse.json(logs);
+    return NextResponse.json(logs.map((l) => ({ ...l, client_ip: mask(l.client_ip) })));
   } catch (error) {
     console.error("Client Access API Error:", error);
     return NextResponse.json([]);

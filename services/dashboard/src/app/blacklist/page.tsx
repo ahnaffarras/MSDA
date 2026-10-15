@@ -9,19 +9,23 @@ import {
   normalizeDomain,
   splitDomains,
   typeLabel,
+  isEffective,
+  isExpired,
   type BlacklistEntry,
 } from "@/lib/blacklist";
+import BlocklistTools from "@/components/BlocklistTools";
 import { formatDateTimeWIB, timeAgo } from "@/lib/format";
 import PageHeader from "@/components/PageHeader";
 import { useLoad } from "@/lib/useLoad";
 
-type StatusFilter = "all" | "active" | "inactive";
+type StatusFilter = "all" | "active" | "inactive" | "expired";
 type Notice = { tone: "ok" | "warn" | "error"; text: string } | null;
 
 const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
   { value: "all", label: "All" },
   { value: "active", label: "Active" },
   { value: "inactive", label: "Inactive" },
+  { value: "expired", label: "Expired" },
 ];
 
 export default function BlacklistPage() {
@@ -37,6 +41,7 @@ export default function BlacklistPage() {
   const [domainsInput, setDomainsInput] = useState("");
   const [newType, setNewType] = useState("gambling");
   const [newDescription, setNewDescription] = useState("");
+  const [newExpires, setNewExpires] = useState("");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -121,6 +126,7 @@ export default function BlacklistPage() {
           domains: parts,
           type: newType,
           description: newDescription,
+          expires_at: newExpires || undefined,
         }),
       });
       if (!res) return;
@@ -136,12 +142,14 @@ export default function BlacklistPage() {
       const skipped: { input: string; reason: string }[] = data.skipped ?? [];
       const exists = skipped.filter((s) => s.reason === "exists").length;
       const bad = skipped.filter((s) => s.reason === "invalid").length;
+      const allow = skipped.filter((s) => s.reason === "allowlisted").length;
       const bits = [
         created.length > 0
           ? `${created.length} ${created.length === 1 ? "domain" : "domains"} added`
           : "",
         exists > 0 ? `${exists} already listed` : "",
         bad > 0 ? `${bad} invalid` : "",
+        allow > 0 ? `${allow} skipped (on the allowlist)` : "",
       ].filter(Boolean);
       setNotice({
         tone: created.length > 0 ? (bad || exists ? "warn" : "ok") : "error",
@@ -150,6 +158,7 @@ export default function BlacklistPage() {
       if (created.length > 0) {
         setDomainsInput("");
         setNewDescription("");
+        setNewExpires("");
         await load();
       }
     } catch {
@@ -193,43 +202,32 @@ export default function BlacklistPage() {
     await load();
   };
 
-  // Batch actions
-  const batchToggleActive = async (targetActive: boolean) => {
-    setNotice(null);
-    setBusy(true);
-    let successCount = 0;
-    for (const id of Array.from(selectedIds)) {
-      const res = await write(`/api/blacklist/${id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ is_active: targetActive }),
-      });
-      if (res && res.ok) successCount++;
-    }
-    setBusy(false);
-    setNotice({
-      tone: "ok",
-      text: `${successCount} domain ${targetActive ? "diaktifkan" : "dinonaktifkan"}.`,
-    });
-    await load();
-  };
-
-  const batchDelete = async () => {
+  // Aksi massal: satu permintaan ke /api/blacklist/bulk (satu baris audit), bukan loop per entri
+  const runBulk = async (action: "enable" | "disable" | "delete") => {
     setDeleteDialog({ open: false });
     setNotice(null);
     setBusy(true);
-    let successCount = 0;
-    for (const id of Array.from(selectedIds)) {
-      const res = await write(`/api/blacklist/${id}`, { method: "DELETE" });
-      if (res && res.ok) successCount++;
+    try {
+      const res = await write("/api/blacklist/bulk", {
+        method: "POST",
+        body: JSON.stringify({ ids: Array.from(selectedIds), action }),
+      });
+      if (!res) return;
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setNotice({ tone: "error", text: data?.error ?? "The bulk change failed." });
+        return;
+      }
+      if (action === "delete") setSelectedIds(new Set());
+      const verb = action === "enable" ? "enabled" : action === "disable" ? "disabled" : "removed from the blocklist";
+      setNotice({ tone: "ok", text: `${data.affected} domain(s) ${verb}.` });
+      await load();
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
-    setSelectedIds(new Set());
-    setNotice({
-      tone: "ok",
-      text: `${successCount} domain berhasil dihapus dari blocklist.`,
-    });
-    await load();
   };
+  const batchToggleActive = (targetActive: boolean) => runBulk(targetActive ? "enable" : "disable");
+  const batchDelete = () => runBulk("delete");
 
   const counts = useMemo(() => {
     const byType = new Map<string, number>();
@@ -241,11 +239,12 @@ export default function BlacklistPage() {
     const q = search.trim().toLowerCase();
     return entries.filter((e) => {
       if (typeFilter !== "all" && e.type !== typeFilter) return false;
-      if (statusFilter === "active" && !e.is_active) return false;
-      if (statusFilter === "inactive" && e.is_active) return false;
+      if (statusFilter === "active" && !isEffective(e, now)) return false;
+      if (statusFilter === "inactive" && (isEffective(e, now) || isExpired(e, now))) return false;
+      if (statusFilter === "expired" && !isExpired(e, now)) return false;
       return !q || e.domain.includes(q) || e.description.toLowerCase().includes(q);
     });
-  }, [entries, search, typeFilter, statusFilter]);
+  }, [entries, search, typeFilter, statusFilter, now]);
 
   const isAllSelected = visible.length > 0 && visible.every((e) => selectedIds.has(e._id));
   const isSomeSelected = visible.some((e) => selectedIds.has(e._id)) && !isAllSelected;
@@ -267,14 +266,15 @@ export default function BlacklistPage() {
     });
   };
 
-  const activeCount = entries.filter((e) => e.is_active).length;
-  const stillHit = entries.filter((e) => e.is_active && (e.hits_7d ?? 0) > 0).length;
+  const activeCount = entries.filter((e) => isEffective(e, now)).length;
+  const stillHit = entries.filter((e) => isEffective(e, now) && (e.hits_7d ?? 0) > 0).length;
 
   return (
     <div className="min-h-screen bg-background pb-16">
       <PageHeader
         crumbs={[{ label: "Dashboard", href: "/" }, { label: "Blocklist" }]}
         title="Blocklist"
+        actions={<BlocklistTools isAdmin={isAdmin} onChanged={() => void load()} />}
         description={
           <>
             The n8n workflow checks every DNS query against this list. Blocking{" "}
@@ -353,6 +353,18 @@ export default function BlacklistPage() {
                   placeholder="e.g. Blocked per school rule"
                   className="w-full px-3 py-2 rounded-lg border border-line bg-background text-sm text-chalk placeholder-chalk-faint focus:border-primary focus:outline-none"
                 />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-chalk-dim mb-1.5">
+                  Block until (optional)
+                </label>
+                <input
+                  type="date"
+                  value={newExpires}
+                  onChange={(e) => setNewExpires(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-line bg-background text-sm text-chalk focus:border-primary focus:outline-none"
+                />
+                <p className="mt-1 text-[11px] text-chalk-faint">Leave empty to block permanently. The block ends at the end of that day (WIB).</p>
               </div>
             </div>
           </div>
@@ -609,6 +621,20 @@ export default function BlacklistPage() {
                                 <span className="w-1.5 h-1.5 rounded-full bg-chalk-faint" />
                                 Inactive
                               </span>
+                            )}
+                            {isExpired(e, now) && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-watch/10 text-watch border border-watch/20" title="The block period has ended">Expired</span>
+                            )}
+                            {!isExpired(e, now) && e.expires_at && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-surface-3 text-chalk-dim border border-line" title={`Blocked until the end of this day (WIB)`}>
+                                Until {new Date(e.expires_at).toLocaleDateString("en-GB", { timeZone: "Asia/Jakarta", day: "numeric", month: "short", year: "numeric" })}
+                              </span>
+                            )}
+                            {e.allowlisted && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-safe/10 text-safe border border-safe/20" title="An allowlist entry covers this domain, so it is not blocked">Overridden by allowlist</span>
+                            )}
+                            {e.source && e.source !== "manual" && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-surface-3 text-chalk-faint border border-line">{e.source}</span>
                             )}
                           </div>
                           {(e.description || e.created_at) && (

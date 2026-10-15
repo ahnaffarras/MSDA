@@ -10,4 +10,7 @@ export async function register() {
   startStorageScheduler()
   const { bootstrapWithRetry } = await import('./lib/auth')
   bootstrapWithRetry()
+  // Index koleksi data DNS (D7), di latar belakang agar start tidak tertahan
+  const { ensureDataIndexesInBackground } = await import('./lib/data-indexes')
+  ensureDataIndexesInBackground()
 }

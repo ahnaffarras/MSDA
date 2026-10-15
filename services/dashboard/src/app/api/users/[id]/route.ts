@@ -3,6 +3,7 @@ import { ObjectId } from 'mongodb'
 import { guardAdmin } from '@/lib/admin'
 import { countActiveAdmins, hashPassword, revokeUserSessions, toPublicUser, usersCol } from '@/lib/auth'
 import { ROLES, validatePassword, type Role } from '@/lib/auth-types'
+import { actorOf, recordAudit } from '@/lib/audit'
 
 export const dynamic = 'force-dynamic'
 
@@ -86,6 +87,14 @@ export async function PATCH(request: Request, { params }: Ctx) {
     await users.updateOne({ _id }, { $set: set })
     if (revoke) await revokeUserSessions(_id)
 
+    // Satu baris audit per jenis perubahan (password tidak pernah dicatat, hanya fakta ia di-reset)
+    const actor = actorOf(guard.user)
+    const base = { request, actor, targetType: 'user', targetId: id } as const
+    if (body.password !== undefined) await recordAudit({ ...base, action: 'user.reset_password', meta: { username: target.username } })
+    if (body.role !== undefined) await recordAudit({ ...base, action: 'user.change_role', meta: { username: target.username, from: target.role, to: body.role } })
+    if (body.isActive !== undefined) await recordAudit({ ...base, action: 'user.set_active', meta: { username: target.username, is_active: body.isActive } })
+    if (body.displayName !== undefined) await recordAudit({ ...base, action: 'user.update', meta: { username: target.username } })
+
     const fresh = await users.findOne({ _id })
     return NextResponse.json({ user: fresh ? toPublicUser(fresh) : null }, { headers: NO_STORE })
   } catch (error) {
@@ -113,6 +122,14 @@ export async function DELETE(request: Request, { params }: Ctx) {
     }
     await users.deleteOne({ _id })
     await revokeUserSessions(_id)
+    await recordAudit({
+      action: 'user.delete',
+      request,
+      actor: actorOf(guard.user),
+      targetType: 'user',
+      targetId: id,
+      meta: { username: target.username, role: target.role },
+    })
     return NextResponse.json({ ok: true }, { headers: NO_STORE })
   } catch (error) {
     console.error('[users DELETE]', error)

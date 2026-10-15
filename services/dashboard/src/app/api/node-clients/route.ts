@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getDb } from '@/lib/db'
 import { intParam, riskOf, sinceFilter, worstRisk } from '@/lib/query'
+import { ipMaskerFor } from '@/lib/privacy-settings'
 import type { RiskLevel } from '@/lib/domain-risk'
 
 /**
@@ -117,7 +118,8 @@ export async function GET(request: Request) {
       })
       .sort((a, b) => (a.last_seen < b.last_seen ? 1 : -1))
 
-    return NextResponse.json({ ap_ip: apIp, hours, clients })
+    const mask = await ipMaskerFor(request)
+    return NextResponse.json({ ap_ip: apIp, hours, clients: clients.map(c => ({ ...c, client_ip: mask(c.client_ip) })) })
   } catch (error) {
     console.error('Node Clients API Error:', error)
     return NextResponse.json({ ap_ip: apIp, hours, clients: [], error: 'Failed to fetch' }, { status: 500 })
