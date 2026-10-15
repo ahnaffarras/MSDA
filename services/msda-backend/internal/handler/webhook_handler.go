@@ -24,7 +24,7 @@ func NewWebhookHandler(repo *repository.NotificationRepo, hub *ws.Hub) *WebhookH
 func (h *WebhookHandler) Receive(c *gin.Context) {
 	var payload model.WebhookPayload
 	if err := c.ShouldBindJSON(&payload); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid webhook payload"})
 		return
 	}
 
@@ -38,11 +38,18 @@ func (h *WebhookHandler) Receive(c *gin.Context) {
 		defer cancel()
 
 		// Save to notification history
+		severity := payload.Severity
+		if severity == "" {
+			severity = model.SeverityWarning // payload lama tanpa severity
+		}
 		notif := &model.Notification{
 			TypeSend:  payload.TypeSend,
 			Data:      payload.Data,
 			IsRead:    false,
 			Timestamp: payload.Timestamp,
+			Severity:  severity,
+			DedupKey:  payload.DedupKey,
+			Status:    model.StatusNew,
 		}
 		if err := h.repo.Create(ctx, notif); err != nil {
 			log.Printf("[Webhook] failed to save notification: %v", err)

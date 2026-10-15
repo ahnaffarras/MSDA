@@ -1,0 +1,8 @@
+.git
+.env
+.env.*
+!.env.example
+*.backup
+*.backup-*
+*_test.go
+*.md
