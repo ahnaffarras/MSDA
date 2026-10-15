@@ -257,12 +257,17 @@ Pipeline harian untuk generate laporan DNS traffic menggunakan AI.
 
 ## Go Backend API Routes
 
-### Public Routes (No Auth)
+### Public Routes (tanpa autentikasi)
 
 | Method | Endpoint | Handler | Fungsi |
 |--------|----------|---------|--------|
-| GET | `/health` | inline | Health check |
-| POST | `/api/v1/auth/login` | AuthHandler.Login | Login admin |
+| GET | `/health` | inline | Liveness ringan |
+| GET | `/api/v1/health` | Health | Cek Mongo + Redis (hanya `ok`/`down`) |
+
+### Protected Routes (header `X-Internal-Token` wajib — hanya dari proxy dashboard)
+
+| Method | Endpoint | Handler | Fungsi |
+|--------|----------|---------|--------|
 | GET | `/api/v1/dashboard/summary` | DashboardHandler.Summary | Statistik ringkas |
 | GET | `/api/v1/dashboard/lab-grid` | DashboardHandler.LabGrid | Grid lab per AP |
 | GET | `/api/v1/dashboard/top-domains` | DashboardHandler.TopDomains | Domain terbanyak |
@@ -275,20 +280,16 @@ Pipeline harian untuk generate laporan DNS traffic menggunakan AI.
 | GET | `/api/v1/client-access/stats` | ClientAccessHandler.Stats | Statistik akses |
 | GET | `/api/v1/client-access/export` | ClientAccessHandler.Export | Export CSV |
 | GET | `/api/v1/access-points` | AccessPointHandler.List | Daftar AP |
-| GET | `/api/v1/notifications` | NotificationHandler.List | Daftar notifikasi |
-| PATCH | `/api/v1/notifications/read-all` | NotificationHandler.ReadAll | Tandai semua dibaca |
-| PATCH | `/api/v1/notifications/:id/read` | NotificationHandler.MarkRead | Tandai dibaca |
-| GET | `/ws/dashboard` | ws.ServeWS | WebSocket real-time |
+| GET | `/api/v1/notifications` | NotificationHandler.List | Daftar notifikasi (filter status/severity/tipe/tanggal/q) |
+| GET | `/api/v1/notifications/unread-count` | NotificationHandler.UnreadCount | Badge & deteksi alert baru |
+| POST | `/api/v1/notifications/bulk-status` | NotificationHandler.BulkSetStatus | Ubah status banyak sekaligus |
+| PATCH | `/api/v1/notifications/:id/status` | NotificationHandler.SetStatus | new → acknowledged → resolved (+ catatan) |
+| PATCH | `/api/v1/notifications/read-all` | NotificationHandler.ReadAll | (kompatibilitas) |
+| PATCH | `/api/v1/notifications/:id/read` | NotificationHandler.MarkRead | (kompatibilitas) |
+| GET | `/ws/dashboard` | ws.ServeWS | WebSocket (hanya bertoken internal) |
+| GET/POST/PUT/PATCH/DELETE | `/api/v1/blacklist[...]` | BlacklistHandler | CRUD blacklist |
 
-### Protected Routes (JWT Auth Required)
-
-| Method | Endpoint | Handler | Fungsi |
-|--------|----------|---------|--------|
-| GET | `/api/v1/auth/me` | AuthHandler.Me | Info admin saat ini |
-| POST | `/api/v1/blacklist` | BlacklistHandler.Create | Tambah blacklist |
-| PUT | `/api/v1/blacklist/:id` | BlacklistHandler.Update | Update blacklist |
-| PATCH | `/api/v1/blacklist/:id/toggle-active` | BlacklistHandler.ToggleActive | Toggle status |
-| DELETE | `/api/v1/blacklist/:id` | BlacklistHandler.Delete | Hapus blacklist |
+> Login/logout/JWT backend (`/api/v1/auth/*`) telah dihapus. Autentikasi pengguna sepenuhnya ada di dashboard (cookie sesi); lihat `MSDA-API-STRUCTURE.md` §1.
 
 ### Webhook Route (Token Auth Required)
 
