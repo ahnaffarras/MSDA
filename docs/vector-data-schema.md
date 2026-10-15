@@ -89,8 +89,16 @@ Setiap payload HTTP POST dari Vector membawa HTTP Headers berikut:
 POST /webhook/msda-dns HTTP/1.1
 Host: n8n:5678
 Content-Type: application/json
+<<<<<<< HEAD
 X-MSDA-Token: changeme-token
 User-Agent: Vector/0.38.0
 ```
 
 > 💡 **Rekomendasi di n8n**: Gunakan Node Webhook di n8n dengan opsi *Header Authentication* atau atur *IF Node* untuk menguji apakah `$header["x-msda-token"] == "changeme-token"`.
+=======
+X-MSDA-Token: <MSDA_WEBHOOK_TOKEN>
+User-Agent: Vector/0.38.0
+```
+
+> 💡 **Rekomendasi di n8n**: Gunakan Node Webhook di n8n dengan opsi *Header Authentication* atau atur *IF Node* untuk menguji apakah `$header["x-msda-token"] == "<MSDA_WEBHOOK_TOKEN>"`.
+>>>>>>> 2fdbce0 (updating documentation)
