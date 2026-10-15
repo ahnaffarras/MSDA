@@ -1,3 +1,17 @@
+# MSDA — Docker Compose
+#
+# Port yang dipublikasikan ke host HANYA:
+#   3000  dashboard           (akses pengguna)
+#   5678  n8n                 (sebaiknya di belakang reverse proxy + autentikasi)
+#   514   vector (udp/tcp)    (syslog dari MikroTik)
+#   8686  vector API          (hanya 127.0.0.1)
+# MongoDB, Redis, dan backend TIDAK terbuka dari host; antar-layanan bicara lewat
+# jaringan Docker (mongo, redis, backend:8080). Untuk pengembangan lokal pakai:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+#
+# Secret WAJIB diisi di .env (lihat .env.example). Tanpa nilai, `docker compose up`
+# berhenti dengan pesan yang jelas — tidak ada lagi nilai default yang berbahaya.
+
 services:
   mongo:
     image: mongo:4.4
@@ -5,18 +19,37 @@ services:
     restart: unless-stopped
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:-msda}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-msda123}
-    ports:
-      - "27017:27017"
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?Set MONGO_ROOT_PASSWORD in .env (openssl rand -hex 16)}
     volumes:
       - mongo-data:/data/db
+    healthcheck:
+      # mongo:4.4 memakai shell `mongo` (bukan `mongosh`)
+      test: ["CMD", "mongo", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: msda-redis
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
 
   n8n:
     image: n8nio/n8n:latest
     container_name: msda-n8n
     restart: unless-stopped
     depends_on:
-      - mongo
+      mongo:
+        condition: service_healthy
     ports:
       - "5678:5678"
     environment:
@@ -25,7 +58,8 @@ services:
       N8N_PROTOCOL: http
       NODE_ENV: production
       DB_TYPE: sqlite
-      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-changeme}
+      # Jangan diganti bila n8n sudah menyimpan kredensial: kunci baru membuat kredensial lama tak terbaca.
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?Set N8N_ENCRYPTION_KEY in .env (openssl rand -hex 16). If n8n already has credentials, keep the value used before.}
       WEBHOOK_URL: ${N8N_WEBHOOK_URL:-http://localhost:5678/}
       GENERIC_TIMEZONE: Asia/Jakarta
       TZ: Asia/Jakarta
@@ -36,16 +70,6 @@ services:
     volumes:
       - n8n-data:/home/node/.n8n
 
-  redis:
-    image: redis:7.2-alpine
-    container_name: msda-redis
-    restart: unless-stopped
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis-data:/data
-    command: redis-server --appendonly yes
-
   vector:
     image: timberio/vector:0.38.0-debian
     container_name: msda-vector
@@ -53,14 +77,37 @@ services:
     ports:
       - "514:514/udp"
       - "514:514/tcp"
-      - "8686:8686"
+      - "127.0.0.1:8686:8686"
     environment:
       - VECTOR_N8N_WEBHOOK_URL=http://n8n:5678/webhook/dns-scan-webhook
-      - MSDA_WEBHOOK_TOKEN=${MSDA_WEBHOOK_TOKEN:-changeme-token}
+      - MSDA_WEBHOOK_TOKEN=${MSDA_WEBHOOK_TOKEN:?Set MSDA_WEBHOOK_TOKEN in .env (openssl rand -hex 32)}
     volumes:
       - ../log-parser/vector.toml:/etc/vector/vector.toml:ro
       - vector-data:/var/lib/vector
     command: ["--config", "/etc/vector/vector.toml"]
+
+  # Backup MongoDB terjadwal (mongodump → volume backup-data). Panduan restore: docs/backup-restore.md
+  backup:
+    image: mongo:4.4
+    container_name: msda-backup
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "/backup.sh"]
+    environment:
+      MONGODB_URI: mongodb://${MONGO_ROOT_USER:-msda}:${MONGO_ROOT_PASSWORD:?Set MONGO_ROOT_PASSWORD in .env}@mongo:27017/?authSource=admin
+      BACKUP_INTERVAL_HOURS: ${BACKUP_INTERVAL_HOURS:-24}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+    volumes:
+      - ../backup/backup.sh:/backup.sh:ro
+      - backup-data:/backups
+    healthcheck:
+      test: ["CMD", "/bin/bash", "/backup.sh", "--healthcheck"]
+      interval: 1h
+      timeout: 10s
+      retries: 1
+      start_period: 30m
 
   backend:
     build:
@@ -69,38 +116,47 @@ services:
     container_name: msda-backend
     restart: unless-stopped
     depends_on:
-      - mongo
-      - redis
-    ports:
-      - "8081:8080"
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # Tanpa `ports`: hanya dashboard dan n8n yang boleh memanggil backend (lewat jaringan Docker).
     environment:
       APP_ENV: production
       PORT: 8080
-      MONGODB_URI: mongodb://${MONGO_ROOT_USER:-msda}:${MONGO_ROOT_PASSWORD:-msda123}@mongo:27017/${MONGODB_DB:-msda}?authSource=admin
+      MONGODB_URI: mongodb://${MONGO_ROOT_USER:-msda}:${MONGO_ROOT_PASSWORD:?Set MONGO_ROOT_PASSWORD in .env}@mongo:27017/${MONGODB_DB:-msda}?authSource=admin
       MONGODB_DB: ${MONGODB_DB:-msda}
       REDIS_URL: redis://redis:6379
-      JWT_SECRET: ${JWT_SECRET:-change-me-to-a-random-secret}
-      MSDA_WEBHOOK_TOKEN: ${MSDA_WEBHOOK_TOKEN:-changeme-token}
-      ALLOWED_ORIGINS: http://localhost:3000
+      # Dikirim n8n pada header X-MSDA-Token
+      MSDA_WEBHOOK_TOKEN: ${MSDA_WEBHOOK_TOKEN:?Set MSDA_WEBHOOK_TOKEN in .env (openssl rand -hex 32)}
+      # Dikirim dashboard pada header X-Internal-Token (harus beda dari webhook token)
+      MSDA_INTERNAL_TOKEN: ${MSDA_INTERNAL_TOKEN:?Set MSDA_INTERNAL_TOKEN in .env (openssl rand -hex 32)}
 
   dashboard:
     build:
       context: ../../services/dashboard
       dockerfile: Dockerfile
-      args:
-        NEXT_PUBLIC_API_URL: http://backend:8080
     container_name: msda-dashboard
     restart: unless-stopped
     depends_on:
-      - backend
+      mongo:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
     ports:
       - "3000:3000"
     environment:
       NODE_ENV: production
-      MONGODB_URI: mongodb://${MONGO_ROOT_USER:-msda}:${MONGO_ROOT_PASSWORD:-msda123}@mongo:27017/${MONGODB_DB:-msda}?authSource=admin
-      NEXT_PUBLIC_API_URL: http://backend:8080
-      NEXT_PUBLIC_BASE_URL: http://dashboard:3000
-      NEXT_PUBLIC_WS_URL: ws://backend:8080
+      MONGODB_URI: mongodb://${MONGO_ROOT_USER:-msda}:${MONGO_ROOT_PASSWORD:?Set MONGO_ROOT_PASSWORD in .env}@mongo:27017/${MONGODB_DB:-msda}?authSource=admin
+      MONGODB_DB: ${MONGODB_DB:-msda}
+      # Dibaca saat runtime oleh proxy /api-proxy (bukan lagi dikunci saat build)
+      MSDA_BACKEND_URL: http://backend:8080
+      MSDA_INTERNAL_TOKEN: ${MSDA_INTERNAL_TOKEN:?Set MSDA_INTERNAL_TOKEN in .env (openssl rand -hex 32)}
+      # Opsional: webhook n8n untuk tombol "Send test" di Notification settings
+      N8N_TEST_NOTIFY_URL: ${N8N_TEST_NOTIFY_URL:-}
+      # Kunci HMAC untuk penyamaran IP klien bagi viewer (default: MSDA_INTERNAL_TOKEN)
+      MSDA_PRIVACY_KEY: ${MSDA_PRIVACY_KEY:-}
+      MSDA_WEBHOOK_TOKEN: ${MSDA_WEBHOOK_TOKEN:-}
       MSDA_BOOTSTRAP_ADMIN_USER: ${MSDA_BOOTSTRAP_ADMIN_USER:-admin}
       MSDA_BOOTSTRAP_ADMIN_PASSWORD: ${MSDA_BOOTSTRAP_ADMIN_PASSWORD:-}
       MSDA_SESSION_HOURS: ${MSDA_SESSION_HOURS:-12}
@@ -112,3 +168,4 @@ volumes:
   n8n-data:
   vector-data:
   redis-data:
+  backup-data:
