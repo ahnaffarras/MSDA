@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/msda/backend/internal/adguard"
 	"github.com/msda/backend/internal/model"
 	"github.com/msda/backend/internal/repository"
 	"go.mongodb.org/mongo-driver/bson"
@@ -14,10 +15,30 @@ import (
 
 type BlacklistHandler struct {
 	repo *repository.BlacklistRepo
+	// OnChange dipanggil (async) setelah mutasi berhasil; dipakai memicu sinkronisasi AdGuard.
+	// nil bila fitur enforcement nonaktif.
+	OnChange func()
 }
 
 func NewBlacklistHandler(repo *repository.BlacklistRepo) *BlacklistHandler {
 	return &BlacklistHandler{repo: repo}
+}
+
+func (h *BlacklistHandler) changed() {
+	if h.OnChange != nil {
+		go h.OnChange()
+	}
+}
+
+// validateEnforce: mode "enforce" hanya boleh untuk domain yang lolos validasi ketat (D7).
+func validateEnforce(mode, level, domain string) string {
+	if mode != "enforce" || level != "domain" {
+		return ""
+	}
+	if _, err := adguard.NormalizeDomain(domain); err != nil {
+		return "domain cannot be enforced at DNS: " + err.Error()
+	}
+	return ""
 }
 
 func (h *BlacklistHandler) List(c *gin.Context) {
@@ -87,6 +108,11 @@ func (h *BlacklistHandler) Create(c *gin.Context) {
 		return
 	}
 
+	if msg := validateEnforce(req.BlockMode, req.BlockedLevel, req.Domain); msg != "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": msg})
+		return
+	}
+
 	isActive := true
 	if req.IsActive != nil {
 		isActive = *req.IsActive
@@ -98,6 +124,12 @@ func (h *BlacklistHandler) Create(c *gin.Context) {
 		Group:        req.Group,
 		Type:         req.Type,
 		IsActive:     isActive,
+
+		BlockMode:         req.BlockMode,
+		IncludeSubdomains: req.IncludeSubdomains,
+	}
+	if req.BlockMode == "enforce" {
+		entry.EnforceStatus = "pending"
 	}
 
 	result, err := h.repo.Create(c.Request.Context(), entry)
@@ -105,6 +137,7 @@ func (h *BlacklistHandler) Create(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	h.changed()
 	c.JSON(http.StatusCreated, gin.H{"data": result})
 }
 
@@ -127,12 +160,28 @@ func (h *BlacklistHandler) Update(c *gin.Context) {
 	if req.Domain != "" { update["domain"] = req.Domain }
 	if req.Group  != "" { update["group"]  = req.Group }
 	if req.IsActive != nil { update["is_active"] = *req.IsActive }
+	if req.BlockMode != "" {
+		dom := req.Domain
+		if dom == "" {
+			if cur, err := h.repo.GetByID(c.Request.Context(), id); err == nil {
+				dom = cur.Domain
+			}
+		}
+		if msg := validateEnforce(req.BlockMode, req.BlockedLevel, dom); msg != "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": msg})
+			return
+		}
+		update["block_mode"] = req.BlockMode
+		update["enforce_status"] = "pending"
+	}
+	if req.IncludeSubdomains != nil { update["include_subdomains"] = *req.IncludeSubdomains }
 
 	result, err := h.repo.Update(c.Request.Context(), id, update)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	h.changed()
 	c.JSON(http.StatusOK, gin.H{"data": result})
 }
 
@@ -147,6 +196,7 @@ func (h *BlacklistHandler) ToggleActive(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	h.changed()
 	c.JSON(http.StatusOK, gin.H{"data": result})
 }
 
@@ -160,5 +210,6 @@ func (h *BlacklistHandler) Delete(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	h.changed()
 	c.JSON(http.StatusOK, gin.H{"data": gin.H{"deleted": true}})
 }

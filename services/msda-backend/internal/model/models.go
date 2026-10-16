@@ -73,6 +73,13 @@ type DNSBlacklist struct {
 	IsActive     bool               `bson:"is_active"        json:"is_active"`
 	CreatedAt    FlexTime           `bson:"created_at"       json:"created_at"`
 	UpdatedAt    FlexTime           `bson:"updated_at"       json:"updated_at"`
+
+	// ── DNS enforcement (AdGuard Home) — semua opsional/aditif ──
+	BlockMode         string     `bson:"block_mode,omitempty"         json:"block_mode,omitempty"` // "alert" (default) | "enforce"
+	IncludeSubdomains *bool      `bson:"include_subdomains,omitempty" json:"include_subdomains,omitempty"`
+	EnforceStatus     string     `bson:"enforce_status,omitempty"     json:"enforce_status,omitempty"` // pending | synced | error
+	EnforceSyncedAt   *time.Time `bson:"enforce_synced_at,omitempty"  json:"enforce_synced_at,omitempty"`
+	EnforceError      string     `bson:"enforce_error,omitempty"      json:"enforce_error,omitempty"`
 }
 
 type BlacklistRequest struct {
@@ -81,6 +88,10 @@ type BlacklistRequest struct {
 	Group        string `json:"group"`
 	Type         string `json:"type" binding:"required,oneof=gambling adult malware phishing crypto_miner social_media streaming gaming testing custom"`
 	IsActive     *bool  `json:"is_active"`
+
+	// Opsional (AdGuard enforcement). Kosong = tidak diubah / "alert".
+	BlockMode         string `json:"block_mode"         binding:"omitempty,oneof=alert enforce"`
+	IncludeSubdomains *bool  `json:"include_subdomains"`
 }
 
 // ── Client Access DNS ─────────────────────────────────────────────────────────
@@ -96,7 +107,9 @@ type ClientAccessDNS struct {
 	Domain      string             `bson:"domain"          json:"domain"`
 	Group       string             `bson:"group"           json:"group"`
 	Type        string             `bson:"type"            json:"type"`
-	Action      string             `bson:"action"          json:"action"` // "allowed" | "blocked"
+	Action      string             `bson:"action"          json:"action"` // "allowed" | "blocked" (= cocok blocklist; BUKAN bukti diblokir, lihat Enforced)
+	BlockMode   string             `bson:"block_mode,omitempty" json:"block_mode,omitempty"` // "alert" | "enforce"
+	Enforced    bool               `bson:"enforced,omitempty"   json:"enforced,omitempty"`   // true = benar-benar diblokir di DNS
 	ClientIP    string             `bson:"client_ip"       json:"client_ip"`
 	APInfo      APInfo             `bson:"ap_info"         json:"ap_info"`
 	AccessCount int                `bson:"access_count"    json:"access_count"`
@@ -115,6 +128,10 @@ type NotificationData struct {
 	Group  string               `bson:"group"  json:"group"`
 	Type   string               `bson:"type"   json:"type"`
 	Client []NotificationClient `bson:"client" json:"client"`
+
+	// Opsional (AdGuard enforcement): alert "klien X mencoba domain Y — diblokir".
+	Enforced  bool   `bson:"enforced,omitempty"   json:"enforced,omitempty"`
+	BlockMode string `bson:"block_mode,omitempty" json:"block_mode,omitempty"`
 }
 
 // Nilai severity dan status notifikasi. Dokumen lama (sebelum B1) tidak punya
@@ -204,6 +221,8 @@ type LabClient struct {
 	ClientIP   string   `bson:"client_ip"   json:"client_ip"`
 	LastDomain string   `bson:"last_domain" json:"last_domain"`
 	LastAction string   `bson:"last_action" json:"last_action"`
+	// LastEnforced true = aksi terakhir benar-benar diblokir di DNS (bukan sekadar cocok blocklist).
+	LastEnforced bool   `bson:"last_enforced" json:"last_enforced"`
 	LastSeen   FlexTime `bson:"last_seen"   json:"last_seen"`
 	Type       string   `bson:"type"        json:"type"`
 	RiskLevel  string   `bson:"-"           json:"risk_level"` // safe | watch | flag, dihitung di repo

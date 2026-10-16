@@ -80,3 +80,28 @@ func TestIsPlaceholder(t *testing.T) {
 		t.Error("random hex must not be a placeholder")
 	}
 }
+
+func TestValidateProduction_AdguardOnlyWhenEnabled(t *testing.T) {
+	base := map[string]string{
+		"MSDA_WEBHOOK_TOKEN":  strings.Repeat("a", 32),
+		"MSDA_INTERNAL_TOKEN": strings.Repeat("b", 32),
+		"MONGODB_URI":         "mongodb://msda:" + strings.Repeat("c", 16) + "@mongo:27017/msda",
+	}
+	get := func(m map[string]string) func(string) string { return func(k string) string { return m[k] } }
+
+	// Nonaktif: kredensial AdGuard kosong TIDAK mengganggu (perilaku lama).
+	if err := ValidateProduction(get(base)); err != nil {
+		t.Fatalf("disabled enforcement must not add requirements: %v", err)
+	}
+	on := map[string]string{"MSDA_ENFORCEMENT_ENABLED": "true"}
+	for k, v := range base {
+		on[k] = v
+	}
+	if err := ValidateProduction(get(on)); err == nil {
+		t.Fatal("enabled enforcement without credentials must fail")
+	}
+	on["ADGUARD_USER"], on["ADGUARD_PASSWORD"] = "msda", strings.Repeat("z", 16)
+	if err := ValidateProduction(get(on)); err != nil {
+		t.Fatalf("valid credentials rejected: %v", err)
+	}
+}

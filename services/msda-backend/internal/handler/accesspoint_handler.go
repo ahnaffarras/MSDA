@@ -60,6 +60,7 @@ func (h *AccessPointHandler) Clients(c *gin.Context) {
 				ClientIP:   item.ClientIP,
 				LastDomain: item.Domain,
 				LastAction: item.Action,
+				LastEnforced: item.Enforced,
 				LastSeen:   item.Timestamp,
 				RiskLevel:  repository.RiskLevel(item.Type, item.Action),
 			})

@@ -80,6 +80,21 @@ func ValidateProduction(get func(string) string) error {
 		}
 	}
 
+	// DNS enforcement (opsional): bila diaktifkan, kredensial AdGuard wajib kuat.
+	if strings.EqualFold(strings.TrimSpace(get("MSDA_ENFORCEMENT_ENABLED")), "true") {
+		if strings.TrimSpace(get("ADGUARD_USER")) == "" {
+			problems = append(problems, "ADGUARD_USER is empty (MSDA_ENFORCEMENT_ENABLED=true)")
+		}
+		switch pw := get("ADGUARD_PASSWORD"); {
+		case strings.TrimSpace(pw) == "":
+			problems = append(problems, "ADGUARD_PASSWORD is empty (MSDA_ENFORCEMENT_ENABLED=true)")
+		case IsPlaceholder(pw):
+			problems = append(problems, "ADGUARD_PASSWORD still uses a placeholder/default value")
+		case len(pw) < MinDBPasswordLen:
+			problems = append(problems, fmt.Sprintf("ADGUARD_PASSWORD is too short (minimum %d characters)", MinDBPasswordLen))
+		}
+	}
+
 	if len(problems) == 0 {
 		return nil
 	}

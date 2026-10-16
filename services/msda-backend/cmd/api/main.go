@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
+	"github.com/msda/backend/internal/adguard"
 	"github.com/msda/backend/internal/config"
 	"github.com/msda/backend/internal/handler"
 	"github.com/msda/backend/internal/middleware"
@@ -60,6 +61,24 @@ func main() {
 		icancel()
 	}
 
+	// AdGuard Home (opsional; MSDA_ENFORCEMENT_ENABLED=false → tidak melakukan apa pun)
+	aghCfg, aghErr := adguard.LoadConfig(os.Getenv)
+	if aghErr != nil {
+		if getEnv("APP_ENV", "development") == "production" {
+			log.Fatalf("[FATAL] %v", aghErr)
+		}
+		log.Printf("[WARN] %v — enforcement disabled", aghErr)
+		aghCfg.Enabled = false
+	}
+	var aghAPI adguard.API
+	if aghCfg.Enabled {
+		aghAPI = adguard.NewHTTPClient(aghCfg.URL, aghCfg.User, aghCfg.Pass)
+	}
+	aghSvc := adguard.NewService(aghCfg, aghAPI, repository.NewAdguardRepo(db))
+	aghCtx, aghStop := context.WithCancel(context.Background())
+	defer aghStop()
+	go aghSvc.Run(aghCtx)
+
 	// WebSocket hub
 	hub := ws.NewHub()
 	go hub.Run()
@@ -74,7 +93,7 @@ func main() {
 	r.Use(middleware.CORS())
 
 	// Register all routes
-	handler.RegisterRoutes(r, db, rdb, hub)
+	handler.RegisterRoutes(r, db, rdb, hub, aghSvc)
 
 	// Liveness ringan (tanpa cek dependensi). Cek lengkap: GET /api/v1/health
 	r.GET("/health", func(c *gin.Context) {

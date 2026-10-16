@@ -1,7 +1,12 @@
 package handler
 
 import (
+	"context"
+	"log"
+	"time"
+
 	"github.com/gin-gonic/gin"
+	"github.com/msda/backend/internal/adguard"
 	"github.com/msda/backend/internal/middleware"
 	"github.com/msda/backend/internal/repository"
 	"github.com/msda/backend/internal/ws"
@@ -16,7 +21,7 @@ import (
 //   - POST /webhooks/n8n ...... butuh X-MSDA-Token (dikirim n8n).
 //   - Semua rute lain ......... butuh X-Internal-Token (hanya dikirim server Next.js
 //     setelah memverifikasi sesi login dashboard). Backend tidak punya login sendiri.
-func RegisterRoutes(r *gin.Engine, db *mongo.Database, rdb *redis.Client, hub *ws.Hub) {
+func RegisterRoutes(r *gin.Engine, db *mongo.Database, rdb *redis.Client, hub *ws.Hub, agh *adguard.Service) {
 	// Repos
 	blacklistRepo := repository.NewBlacklistRepo(db)
 	dnsInfoRepo := repository.NewDNSInfoRepo(db)
@@ -27,6 +32,17 @@ func RegisterRoutes(r *gin.Engine, db *mongo.Database, rdb *redis.Client, hub *w
 	dashH := NewDashboardHandler(clientRepo)
 	dnsH := NewDNSInfoHandler(dnsInfoRepo)
 	blH := NewBlacklistHandler(blacklistRepo)
+	aghH := NewAdguardHandler(agh)
+	if agh.Enabled() {
+		// Setelah mutasi blocklist lewat backend, picu sinkronisasi AdGuard (async).
+		blH.OnChange = func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+			defer cancel()
+			if _, err := agh.Syncer.Sync(ctx, false); err != nil {
+				log.Printf("[AdGuard] sync after blocklist change failed: %v", err)
+			}
+		}
+	}
 	caH := NewClientAccessHandler(clientRepo)
 	apH := NewAccessPointHandler(clientRepo)
 	webhookH := NewWebhookHandler(notifRepo, hub)
@@ -39,6 +55,8 @@ func RegisterRoutes(r *gin.Engine, db *mongo.Database, rdb *redis.Client, hub *w
 
 	// ── Webhook (dari n8n, token sendiri) ──────────────────────────────
 	v1.POST("/webhooks/n8n", middleware.RequireWebhookToken(), webhookH.Receive)
+	// Status AdGuard untuk monitoring n8n (n8n tidak pernah memanggil API AGH langsung).
+	v1.GET("/webhooks/adguard-status", middleware.RequireWebhookToken(), aghH.WebhookStatus)
 
 	// ── Terlindungi (hanya lewat proxy dashboard) ──────────────────────
 	api := v1.Group("", middleware.RequireInternalToken(), middleware.Actor())
@@ -67,6 +85,15 @@ func RegisterRoutes(r *gin.Engine, db *mongo.Database, rdb *redis.Client, hub *w
 		bl.PUT("/:id", blH.Update)
 		bl.PATCH("/:id/toggle-active", blH.ToggleActive)
 		bl.DELETE("/:id", blH.Delete)
+	}
+
+	ag := api.Group("/adguard")
+	{
+		ag.GET("/status", aghH.Status)
+		ag.POST("/sync", aghH.Sync)
+		ag.POST("/protection", aghH.Protection)
+		ag.GET("/check", aghH.Check)
+		ag.GET("/stats", aghH.Stats)
 	}
 
 	ca := api.Group("/client-access")
