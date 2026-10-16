@@ -109,6 +109,7 @@ export async function GET(request: Request) {
           timestamp: iso(e.timestamp),
           client_ip: mask(String(e.client_ip ?? '')),
           action: String(e.action ?? ''),
+          enforced: e.enforced === true,
           risk: riskOf(e as { risk_level?: string; action?: string; type?: string }),
           ap_label: String(e.ap_info?.label ?? e.ap_name ?? ''),
         })),

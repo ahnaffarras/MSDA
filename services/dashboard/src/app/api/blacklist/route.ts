@@ -3,6 +3,8 @@ import { getDb } from '@/lib/db'
 import { adminProtected, guardAdmin } from '@/lib/admin'
 import { actorOf, recordAudit } from '@/lib/audit'
 import { addBlocklistEntries, isAllowlisted, loadAllowlist } from '@/lib/blocklist-db'
+import { syncAdguard } from '@/lib/adguard'
+import { isBlockMode } from '@/lib/enforce'
 import { sinceFilter } from '@/lib/query'
 import {
   BLACKLIST_SOURCES,
@@ -65,6 +67,15 @@ export async function GET() {
           source: typeof d.source === 'string' && d.source ? d.source : 'manual',
           note: typeof d.note === 'string' ? d.note : '',
           allowlisted: isAllowlisted(d.domain, allow),
+          block_mode: d.block_mode === 'enforce' ? 'enforce' : 'alert',
+          include_subdomains: d.include_subdomains !== false,
+          ...(d.block_mode === 'enforce'
+            ? {
+                enforce_status: ['pending', 'synced', 'error'].includes(d.enforce_status) ? d.enforce_status : 'pending',
+                enforce_error: typeof d.enforce_error === 'string' ? d.enforce_error : '',
+                enforce_synced_at: iso(d.enforce_synced_at),
+              }
+            : {}),
         }
       })
 
@@ -127,9 +138,17 @@ export async function POST(request: Request) {
     const note = typeof body.note === 'string' ? body.note.trim() : ''
     const source = BLACKLIST_SOURCES.includes(body.source as never) ? (body.source as BlacklistSource) : 'manual'
 
-    const { created, skipped } = await addBlocklistEntries(
+    if (body.block_mode !== undefined && !isBlockMode(body.block_mode)) {
+      return NextResponse.json({ error: 'block_mode must be "alert" or "enforce"' }, { status: 400 })
+    }
+    const block_mode = body.block_mode === 'enforce' ? 'enforce' : 'alert'
+    const include_subdomains = body.include_subdomains === false ? false : undefined
+
+    const { created, createdIds, skipped } = await addBlocklistEntries(
       db,
-      rawList.map(input => ({ input, type, group, description, note, expires_at: parsedExpiry, source })),
+      rawList.map(input => ({ input, type, group, description, note, expires_at: parsedExpiry, source, block_mode, include_subdomains })),
+      // Hanya dari preset yang daftarnya sudah ditampilkan & dikonfirmasi admin di UI.
+      { allowHighImpact: body.confirm_high_impact === true },
     )
 
     if (created.length > 0) {
@@ -138,11 +157,12 @@ export async function POST(request: Request) {
         request,
         actor: actorOf(guard.user),
         targetType: 'blacklist',
-        meta: { count: created.length, domains: created.slice(0, 20), type, group },
+        meta: { count: created.length, domains: created.slice(0, 20), type, group, block_mode },
       })
+      if (block_mode === 'enforce') await syncAdguard(createdIds)
     }
 
-    const status = created.length > 0 ? 201 : skipped.some(s => s.reason === 'exists' || s.reason === 'allowlisted') ? 409 : 400
+    const status = created.length > 0 ? 201 : skipped.some(s => s.reason === 'exists' || s.reason === 'allowlisted' || s.reason === 'not_enforceable' || s.reason === 'needs_confirmation') ? 409 : 400
     return NextResponse.json({ created, skipped }, { status })
   } catch (error) {
     console.error('[blacklist POST]', error)

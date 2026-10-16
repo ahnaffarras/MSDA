@@ -92,6 +92,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ ip: 
           timestamp: iso(e.timestamp),
           domain: String(e.domain ?? ''),
           action: String(e.action ?? ''),
+          enforced: e.enforced === true,
           risk: riskOf(e as { risk_level?: string; action?: string; type?: string }),
           ap_label: String(e.ap_info?.label ?? e.ap_name ?? ''),
         })),

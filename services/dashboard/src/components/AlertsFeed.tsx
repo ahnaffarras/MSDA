@@ -20,13 +20,13 @@ export function AlertsFeed({ labGrid }: { labGrid: LabGridAP[] }) {
         <ShieldExclamation width={18} height={18} className="text-chalk-faint" />
         <div>
           <h2 className="font-display text-lg font-semibold text-chalk">Needs attention</h2>
-          <p className="text-sm text-chalk-dim">Domains blocked in the last 8 hours</p>
+          <p className="text-sm text-chalk-dim">Blocklist matches in the last 8 hours</p>
         </div>
       </div>
 
       {flagged.length === 0 ? (
         <p className="mt-5 text-sm text-chalk-dim">
-          No blocked domain access in this session.
+          No blocklist match in this session.
         </p>
       ) : (
         <ul className="mt-4 space-y-2.5">
@@ -46,7 +46,7 @@ export function AlertsFeed({ labGrid }: { labGrid: LabGridAP[] }) {
                   </p>
                   <p className="font-data text-chalk-dim truncate">{client.last_domain}</p>
                   <p className="text-xs" style={{ color: colors.fg }}>
-                    {RISK_LABEL[risk]}
+                    {RISK_LABEL[risk]} · {client.last_enforced === true ? "Blocked at DNS" : "Matched blocklist (monitor)"}
                   </p>
                 </div>
                 <span className="shrink-0 font-data text-xs text-chalk-faint">

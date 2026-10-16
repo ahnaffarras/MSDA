@@ -21,6 +21,9 @@ export async function GET() {
       action: 'blocked'
     })
     
+    // Diblokir benar-benar di DNS (AdGuard enforcement). 0 bila fitur mati.
+    const blockedAttempts = await db.collection('ip_access_dns').countDocuments({ enforced: true })
+
     // Active clients - unique IPs from last 5 minutes
     let activeClientsArray = await db.collection('ip_access_dns').distinct('client_ip', sinceFilter(5 / 60))
     
@@ -37,6 +40,7 @@ export async function GET() {
     return NextResponse.json({
       totalEvents,
       detectedThreats,
+      blockedAttempts,
       activeClients: activeClientsArray.length,
       blacklistedDomains
     })

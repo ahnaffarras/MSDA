@@ -37,6 +37,9 @@ export const AUDIT_ACTION_LABELS = {
   'allowlist.delete': 'Removed from allowlist',
   'blacklist.import': 'Imported blocklist (CSV)',
   'blacklist.bulk': 'Bulk blocklist change',
+  'blacklist.mode': 'Changed blocklist mode (Monitor / Block DNS)',
+  'adguard.sync': 'Synced DNS rules to AdGuard Home',
+  'adguard.protection': 'Changed AdGuard Home protection',
 } as const
 
 export type AuditAction = keyof typeof AUDIT_ACTION_LABELS

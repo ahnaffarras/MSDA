@@ -50,6 +50,13 @@ export interface BlacklistEntry {
   note?: string
   /** domain ini tercakup allowlist → allowlist menang, entri tidak berlaku */
   allowlisted?: boolean
+  /** "alert" (Monitor, default bila kosong) | "enforce" (Block DNS lewat AdGuard Home) */
+  block_mode?: 'alert' | 'enforce'
+  /** false = hanya domain persis (|d^); default true (domain + semua subdomain) */
+  include_subdomains?: boolean
+  enforce_status?: 'pending' | 'synced' | 'error'
+  enforce_error?: string
+  enforce_synced_at?: string | null
 }
 
 export const BLACKLIST_SOURCES = ['manual', 'feed', 'auto', 'import'] as const

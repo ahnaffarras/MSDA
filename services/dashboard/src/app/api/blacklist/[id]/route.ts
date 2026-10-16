@@ -4,12 +4,23 @@ import { getDb } from '@/lib/db'
 import { guardAdmin } from '@/lib/admin'
 import { actorOf, recordAudit } from '@/lib/audit'
 import { isKnownType, parseExpiry } from '@/lib/blacklist'
+import { syncAdguard } from '@/lib/adguard'
+import { checkEnforceable, isBlockMode, isHighImpact, parseNeverBlock } from '@/lib/enforce'
 
 type Ctx = { params: Promise<{ id: string }> }
+type Existing = { domain?: string; block_mode?: string }
+
+async function loadExisting(id: string): Promise<Existing | null> {
+  const doc = await (await getDb()).collection('dns_blacklist').findOne({ _id: new ObjectId(id) }, { projection: { domain: 1, block_mode: 1 } })
+  return doc ? { domain: doc.domain as string | undefined, block_mode: doc.block_mode as string | undefined } : null
+}
 
 /**
  * PATCH /api/blacklist/:id
- * Body (salah satu atau lebih): { is_active, type, group, description, note, expires_at (YYYY-MM-DD | null) }
+ * Body (salah satu atau lebih): { is_active, type, group, description, note, expires_at (YYYY-MM-DD | null),
+ *   block_mode ('alert' | 'enforce'), include_subdomains, confirm_domain }
+ * Mengubah ke 'enforce' memvalidasi domain (public suffix / never-block) dan, untuk domain populer/pendek,
+ * mewajibkan confirm_domain = domainnya.
  * Domain tidak bisa diubah — hapus lalu tambah baru.
  */
 export async function PATCH(request: Request, { params }: Ctx) {
@@ -27,6 +38,38 @@ export async function PATCH(request: Request, { params }: Ctx) {
   }
 
   const set: Record<string, unknown> = {}
+  const unset: Record<string, ''> = {}
+  let existing: Existing | null
+  try {
+    existing = await loadExisting(id)
+  } catch (error) {
+    console.error('[blacklist PATCH lookup]', error)
+    return NextResponse.json({ error: 'Failed to update the entry' }, { status: 500 })
+  }
+  if (!existing) return NextResponse.json({ error: 'Entry not found' }, { status: 404 })
+
+  if ('block_mode' in body) {
+    if (!isBlockMode(body.block_mode)) return NextResponse.json({ error: 'block_mode must be "alert" or "enforce"' }, { status: 400 })
+    if (body.block_mode === 'enforce') {
+      const domain = String(existing.domain ?? '').toLowerCase()
+      const chk = checkEnforceable(domain, parseNeverBlock(process.env.MSDA_NEVER_BLOCK))
+      if (!chk.ok) return NextResponse.json({ error: chk.message, code: chk.code }, { status: 400 })
+      if (isHighImpact(domain) && body.confirm_domain !== domain) {
+        return NextResponse.json(
+          { error: `This domain is widely used or very short. Type "${domain}" to confirm blocking it and all its subdomains.`, code: 'confirm_required' },
+          { status: 400 },
+        )
+      }
+      set.block_mode = 'enforce'
+      set.enforce_status = 'pending'
+    } else {
+      set.block_mode = 'alert'
+      unset.enforce_status = ''
+      unset.enforce_synced_at = ''
+      unset.enforce_error = ''
+    }
+  }
+  if (typeof body.include_subdomains === 'boolean') set.include_subdomains = body.include_subdomains
   if (typeof body.is_active === 'boolean') set.is_active = body.is_active
   if (typeof body.type === 'string') {
     if (!isKnownType(body.type)) return NextResponse.json({ error: 'Unknown category' }, { status: 400 })
@@ -41,23 +84,28 @@ export async function PATCH(request: Request, { params }: Ctx) {
     if (exp && exp.getTime() <= Date.now()) return NextResponse.json({ error: 'expires_at must be in the future' }, { status: 400 })
     set.expires_at = exp
   }
-  if (Object.keys(set).length === 0) return NextResponse.json({ error: 'No changes provided' }, { status: 400 })
+  if (Object.keys(set).length === 0 && Object.keys(unset).length === 0) return NextResponse.json({ error: 'No changes provided' }, { status: 400 })
   set.updated_at = new Date()
 
   try {
     const db = await getDb()
-    const res = await db.collection('dns_blacklist').updateOne({ _id: new ObjectId(id) }, { $set: set })
+    const res = await db
+      .collection('dns_blacklist')
+      .updateOne({ _id: new ObjectId(id) }, { $set: set, ...(Object.keys(unset).length ? { $unset: unset } : {}) })
     if (res.matchedCount === 0) return NextResponse.json({ error: 'Entry not found' }, { status: 404 })
     const keys = Object.keys(set).filter(k => k !== 'updated_at')
     await recordAudit({
-      action: keys.length === 1 && keys[0] === 'is_active' ? 'blacklist.toggle' : 'blacklist.update',
+      action: 'block_mode' in set ? 'blacklist.mode' : keys.length === 1 && keys[0] === 'is_active' ? 'blacklist.toggle' : 'blacklist.update',
       request,
       actor: actorOf(guard.user),
       targetType: 'blacklist',
       targetId: id,
-      meta: Object.fromEntries(keys.map(k => [k, set[k]])),
+      meta: { domain: existing.domain, ...Object.fromEntries(keys.map(k => [k, set[k]])) },
     })
-    return NextResponse.json({ ok: true })
+    // Sinkronkan AdGuard bila entri ini (pernah) berstatus enforce.
+    let sync: string | undefined
+    if (existing.block_mode === 'enforce' || set.block_mode === 'enforce') sync = await syncAdguard([id])
+    return NextResponse.json({ ok: true, ...(sync ? { sync } : {}) })
   } catch (error) {
     console.error('[blacklist PATCH]', error)
     return NextResponse.json({ error: 'Failed to update the entry' }, { status: 500 })
@@ -74,7 +122,7 @@ export async function DELETE(request: Request, { params }: Ctx) {
 
   try {
     const db = await getDb()
-    const existing = await db.collection('dns_blacklist').findOne({ _id: new ObjectId(id) }, { projection: { domain: 1, type: 1 } })
+    const existing = await db.collection('dns_blacklist').findOne({ _id: new ObjectId(id) }, { projection: { domain: 1, type: 1, block_mode: 1 } })
     const res = await db.collection('dns_blacklist').deleteOne({ _id: new ObjectId(id) })
     if (res.deletedCount === 0) return NextResponse.json({ error: 'Entry not found' }, { status: 404 })
     await recordAudit({
@@ -85,7 +133,9 @@ export async function DELETE(request: Request, { params }: Ctx) {
       targetId: id,
       meta: { domain: existing?.domain, type: existing?.type },
     })
-    return NextResponse.json({ ok: true })
+    let sync: string | undefined
+    if (existing?.block_mode === 'enforce') sync = await syncAdguard()
+    return NextResponse.json({ ok: true, ...(sync ? { sync } : {}) })
   } catch (error) {
     console.error('[blacklist DELETE]', error)
     return NextResponse.json({ error: 'Failed to delete the entry' }, { status: 500 })

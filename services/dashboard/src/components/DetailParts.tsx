@@ -3,6 +3,7 @@
 import { RiskBadge } from '@/components/Risk'
 import { timeAgo } from '@/lib/format'
 import { formatDateTimeWIB } from '@/lib/format'
+import { actionLabel } from '@/lib/labels'
 
 export const nf = (n: number) => n.toLocaleString('en-GB')
 
@@ -28,6 +29,8 @@ export interface RecentRow {
   timestamp: string | null
   risk: string
   action: string
+  /** true = benar-benar diblokir di DNS (bukan sekadar cocok blocklist) */
+  enforced?: boolean
   ap_label: string
   primary: React.ReactNode
 }
@@ -49,7 +52,7 @@ export function RecentTable({ rows, primaryHeader, now }: { rows: RecentRow[]; p
               <td className="py-2 pr-4 whitespace-nowrap text-chalk" title={r.timestamp ? timeAgo(r.timestamp, now) : ''}>{r.timestamp ? formatDateTimeWIB(r.timestamp) : '—'}</td>
               <td className="py-2 pr-4 break-all">{r.primary}</td>
               <td className="py-2 pr-4"><RiskBadge level={r.risk} compact /></td>
-              <td className="py-2 pr-4 text-chalk-dim">{r.action === 'blocked' ? 'Blocked' : 'Allowed'}</td>
+              <td className="py-2 pr-4 text-chalk-dim">{actionLabel(r.action, r.enforced)}</td>
               <td className="py-2 text-xs text-chalk-dim">{r.ap_label || '—'}</td>
             </tr>
           ))}

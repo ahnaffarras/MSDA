@@ -23,7 +23,7 @@ interface ClientDetail {
   series: SeriesPoint[]
   top_domains: { domain: string; queries: number; type: string; group: string; risk: string }[]
   aps: { ap_ip: string; label: string; queries: number }[]
-  recent: { timestamp: string | null; domain: string; action: string; risk: string; ap_label: string }[]
+  recent: { timestamp: string | null; domain: string; action: string; enforced?: boolean; risk: string; ap_label: string }[]
 }
 
 function Inner({ ip }: { ip: string }) {

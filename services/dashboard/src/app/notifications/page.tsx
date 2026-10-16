@@ -373,6 +373,12 @@ export default function NotificationsPage() {
                         )}
                         <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold capitalize ${SEVERITY_STYLE[n.severity]}`}>{n.severity}</span>
                         <span className="text-xs font-semibold text-chalk">{TYPE_LABEL[n.type_send] ?? n.type_send}</span>
+                        {n.type_send === "blacklist_alert" && n.data?.enforced === true && (
+                          <span className="inline-flex items-center rounded-full border border-flag-border bg-flag-bg px-2.5 py-0.5 text-xs font-semibold text-flag" title="The domain is blocked at DNS">Blocked</span>
+                        )}
+                        {n.type_send === "blacklist_alert" && n.data?.enforced !== true && (
+                          <span className="inline-flex items-center rounded-full border border-line bg-surface-3 px-2.5 py-0.5 text-xs font-medium text-chalk-dim" title="Monitor mode: the client could still open the domain">Monitor</span>
+                        )}
                         <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium capitalize ${STATUS_STYLE[n.status]}`}>{n.status}</span>
                         <span className="text-xs font-medium text-chalk" title={formatDateTimeWIB(n.timestamp)}>{formatTimeWIB(n.timestamp)} WIB</span>
                         <span className="text-xs text-chalk-faint">({timeAgo(n.timestamp, now)})</span>

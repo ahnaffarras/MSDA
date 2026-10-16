@@ -1,5 +1,6 @@
 import type { Db } from 'mongodb'
 import { BLACKLIST_TYPES, isKnownType, matchesBlacklist, normalizeDomain, type BlacklistSource } from '@/lib/blacklist'
+import { checkEnforceable, isHighImpact, parseNeverBlock, type BlockMode } from '@/lib/enforce'
 
 /** Domain di allowlist. Allowlist MENANG atas blocklist; entri `a.com` juga mencakup subdomainnya. */
 export async function loadAllowlist(db: Db): Promise<string[]> {
@@ -17,19 +18,24 @@ export interface NewEntry {
   note?: string
   expires_at?: Date | null
   source?: BlacklistSource
+  /** Default "alert". "enforce" = diblokir di DNS (hanya bila fitur enforcement aktif di backend). */
+  block_mode?: BlockMode
+  include_subdomains?: boolean
 }
 
-export type SkipReason = 'invalid' | 'exists' | 'duplicate_input' | 'allowlisted' | 'bad_type'
+export type SkipReason = 'invalid' | 'exists' | 'duplicate_input' | 'allowlisted' | 'bad_type' | 'not_enforceable' | 'needs_confirmation'
 
 /**
  * Tambahkan entri ke `dns_blacklist` (dipakai POST biasa dan impor CSV).
  * Field baru (`expires_at`, `source`, `note`) bersifat opsional/aditif; n8n yang tidak
  * mengenalnya tetap bekerja seperti sebelumnya.
  */
-export async function addBlocklistEntries(db: Db, entries: NewEntry[]) {
+export async function addBlocklistEntries(db: Db, entries: NewEntry[], opts: { allowHighImpact?: boolean } = {}) {
   const col = db.collection('dns_blacklist')
   const allow = await loadAllowlist(db)
   const created: string[] = []
+  const createdIds: string[] = []
+  const neverBlock = parseNeverBlock(process.env.MSDA_NEVER_BLOCK)
   const skipped: { input: string; reason: SkipReason }[] = []
   const seen = new Set<string>()
 
@@ -57,10 +63,22 @@ export async function addBlocklistEntries(db: Db, entries: NewEntry[]) {
       skipped.push({ input: domain, reason: 'exists' })
       continue
     }
+    const enforce = e.block_mode === 'enforce'
+    if (enforce) {
+      if (!checkEnforceable(domain, neverBlock).ok) {
+        skipped.push({ input: domain, reason: 'not_enforceable' })
+        continue
+      }
+      // Domain populer/pendek hanya boleh di-Block lewat dialog konfirmasi per entri.
+      if (isHighImpact(domain) && !opts.allowHighImpact) {
+        skipped.push({ input: domain, reason: 'needs_confirmation' })
+        continue
+      }
+    }
     const now = new Date()
     const description = (e.description ?? '').slice(0, 300)
     const note = (e.note ?? '').slice(0, 300)
-    await col.insertOne({
+    const ins = await col.insertOne({
       domain,
       group: e.group?.trim() || BLACKLIST_TYPES.find(t => t.value === type)?.group || 'Kustom',
       type,
@@ -70,11 +88,14 @@ export async function addBlocklistEntries(db: Db, entries: NewEntry[]) {
       is_active: true,
       expires_at: e.expires_at ?? null,
       source: e.source ?? 'manual',
+      ...(enforce ? { block_mode: 'enforce', enforce_status: 'pending' } : {}),
+      ...(e.include_subdomains === false ? { include_subdomains: false } : {}),
       created_by: 'dashboard',
       created_at: now,
       updated_at: now,
     })
     created.push(domain)
+    createdIds.push(ins.insertedId.toString())
   }
-  return { created, skipped }
+  return { created, createdIds, skipped }
 }

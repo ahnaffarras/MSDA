@@ -12,6 +12,7 @@ type ClientAccessLog = {
   group: string;
   type: string;
   action: string;
+  enforced?: boolean;
   ap_info?: {
     label?: string;
     ip?: string;
@@ -151,7 +152,7 @@ export default function ClientAccessPage() {
               >
                 <option value="all">All statuses</option>
                 <option value="allowed">Allowed</option>
-                <option value="blocked">Blocked</option>
+                <option value="blocked">Matched blocklist / blocked</option>
               </select>
             </div>
           </div>
@@ -254,10 +255,15 @@ export default function ClientAccessPage() {
                             {log.group || "-"}
                           </td>
                           <td className="px-5 py-3 whitespace-nowrap">
-                            {log.action === "blocked" ? (
+                            {log.action === "blocked" && log.enforced === true ? (
                               <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-flag/10 text-flag rounded text-xs font-medium border border-flag/20">
                                 <span className="w-1.5 h-1.5 rounded-full bg-flag"></span>
                                 Blocked
+                              </span>
+                            ) : log.action === "blocked" ? (
+                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-watch/10 text-watch rounded text-xs font-medium border border-watch/20" title="Matched the blocklist in Monitor mode; the client could still open it">
+                                <span className="w-1.5 h-1.5 rounded-full bg-watch"></span>
+                                Matched blocklist (monitor)
                               </span>
                             ) : (
                               <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-safe/10 text-safe rounded text-xs font-medium border border-safe/20">

@@ -26,7 +26,7 @@ interface DomainDetail {
   series: SeriesPoint[]
   clients: { ip: string; raw_hidden: boolean; label: string | null; queries: number; last_seen: string | null }[]
   aps: { ap_ip: string; label: string; queries: number }[]
-  recent: { timestamp: string | null; client_ip: string; action: string; risk: string; ap_label: string }[]
+  recent: { timestamp: string | null; client_ip: string; action: string; enforced?: boolean; risk: string; ap_label: string }[]
 }
 
 const chip = 'inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold'

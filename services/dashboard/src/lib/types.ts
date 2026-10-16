@@ -112,6 +112,9 @@ export interface NotificationData {
   group:  string;
   type:   string;
   client: NotificationClient[];
+  /** AdGuard enforcement (opsional): alert "klien mencoba domain yang diblokir" */
+  enforced?:   boolean;
+  block_mode?: "alert" | "enforce";
 }
 
 export interface NotificationClient {
@@ -147,6 +150,8 @@ export interface LabClient {
   client_ip:   string;
   last_domain: string;
   last_action: string;
+  /** true = benar-benar diblokir di DNS; last_action "blocked" saja berarti cocok blocklist */
+  last_enforced?: boolean;
   last_seen:   string;
   risk_level:  string;
 }

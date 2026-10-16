@@ -14,11 +14,15 @@ import {
   type BlacklistEntry,
 } from "@/lib/blacklist";
 import BlocklistTools from "@/components/BlocklistTools";
+import EnforcementPanel from "@/components/EnforcementPanel";
+import { ModeBadge, ModeDialog, type ModeDialogState } from "@/components/EnforceBits";
+import { isHighImpact } from "@/lib/enforce";
 import { formatDateTimeWIB, timeAgo } from "@/lib/format";
 import PageHeader from "@/components/PageHeader";
 import { useLoad } from "@/lib/useLoad";
 
 type StatusFilter = "all" | "active" | "inactive" | "expired";
+type ModeFilter = "all" | "alert" | "enforce";
 type Notice = { tone: "ok" | "warn" | "error"; text: string } | null;
 
 const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
@@ -26,6 +30,12 @@ const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
   { value: "active", label: "Active" },
   { value: "inactive", label: "Inactive" },
   { value: "expired", label: "Expired" },
+];
+
+const MODE_FILTERS: { value: ModeFilter; label: string }[] = [
+  { value: "all", label: "Any mode" },
+  { value: "alert", label: "Monitor" },
+  { value: "enforce", label: "Block DNS" },
 ];
 
 export default function BlacklistPage() {
@@ -37,6 +47,11 @@ export default function BlacklistPage() {
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [modeFilter, setModeFilter] = useState<ModeFilter>("all");
+  // DNS enforcement (AdGuard Home): kontrol mode hanya tampil bila fitur aktif di backend
+  const [enforcementOn, setEnforcementOn] = useState(false);
+  const [modeDialog, setModeDialog] = useState<(ModeDialogState & { open: boolean }) | null>(null);
+  const [modeBusy, setModeBusy] = useState(false);
 
   const [domainsInput, setDomainsInput] = useState("");
   const [newType, setNewType] = useState("gambling");
@@ -83,6 +98,12 @@ export default function BlacklistPage() {
       setEntries(data);
       setLoadError(false);
       setNow(Date.now());
+      try {
+        const en = await fetch("/api/enforcement", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null));
+        setEnforcementOn(en?.enabled === true);
+      } catch {
+        setEnforcementOn(false);
+      }
     } catch (error) {
       console.error("Failed to fetch blacklist:", error);
       setLoadError(true);
@@ -226,6 +247,54 @@ export default function BlacklistPage() {
       setBusy(false);
     }
   };
+  // ── Mode (Monitor / Block DNS) ──────────────────────────────────────────
+  const openModeDialog = (entry: BlacklistEntry | undefined, mode: "alert" | "enforce") => {
+    setOpenKebabId(null);
+    setNotice(null);
+    setModeDialog({
+      open: true,
+      entry,
+      bulkCount: entry ? undefined : selectedIds.size,
+      mode,
+      highImpact: entry ? isHighImpact(entry.domain) : false,
+    });
+  };
+
+  const applyMode = async (confirmDomain: string) => {
+    if (!modeDialog) return;
+    setModeBusy(true);
+    try {
+      const res = modeDialog.entry
+        ? await write(`/api/blacklist/${modeDialog.entry._id}`, {
+            method: "PATCH",
+            body: JSON.stringify({ block_mode: modeDialog.mode, confirm_domain: confirmDomain }),
+          })
+        : await write("/api/blacklist/bulk", {
+            method: "POST",
+            body: JSON.stringify({ ids: Array.from(selectedIds), action: "set_mode", mode: modeDialog.mode }),
+          });
+      if (!res) {
+        setModeDialog(null);
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setModeDialog({ ...modeDialog, error: data?.error ?? "The change failed." });
+        return;
+      }
+      const skipped: { domain: string }[] = data.skipped ?? [];
+      const label = modeDialog.mode === "enforce" ? "Block DNS" : "Monitor";
+      const base = modeDialog.entry ? `${modeDialog.entry.domain} is now set to ${label}.` : `${data.affected ?? 0} domain(s) set to ${label}.`;
+      const extra = skipped.length > 0 ? ` ${skipped.length} skipped (never-block, public suffix, or widely used — change those one by one).` : "";
+      const pending = data.sync === "pending" ? " DNS sync is pending and will retry automatically." : "";
+      setNotice({ tone: skipped.length > 0 || pending ? "warn" : "ok", text: base + extra + pending });
+      setModeDialog(null);
+      await load();
+    } finally {
+      setModeBusy(false);
+    }
+  };
+
   const batchToggleActive = (targetActive: boolean) => runBulk(targetActive ? "enable" : "disable");
   const batchDelete = () => runBulk("delete");
 
@@ -242,9 +311,10 @@ export default function BlacklistPage() {
       if (statusFilter === "active" && !isEffective(e, now)) return false;
       if (statusFilter === "inactive" && (isEffective(e, now) || isExpired(e, now))) return false;
       if (statusFilter === "expired" && !isExpired(e, now)) return false;
+      if (modeFilter !== "all" && (e.block_mode ?? "alert") !== modeFilter) return false;
       return !q || e.domain.includes(q) || e.description.toLowerCase().includes(q);
     });
-  }, [entries, search, typeFilter, statusFilter, now]);
+  }, [entries, search, typeFilter, statusFilter, modeFilter, now]);
 
   const isAllSelected = visible.length > 0 && visible.every((e) => selectedIds.has(e._id));
   const isSomeSelected = visible.some((e) => selectedIds.has(e._id)) && !isAllSelected;
@@ -308,6 +378,9 @@ export default function BlacklistPage() {
             You have view-only access. Only administrators can add, disable or delete blocked domains.
           </p>
         )}
+
+        {/* DNS Enforcement (AdGuard Home) — status, sakelar protection, cek domain */}
+        <EnforcementPanel isAdmin={isAdmin} onChanged={() => void load()} />
 
         {/* Form Tambah Domain */}
         <div className="rounded-xl border border-line bg-surface p-4 md:p-6 space-y-4">
@@ -449,6 +522,24 @@ export default function BlacklistPage() {
                   </button>
                 ))}
               </div>
+
+              {enforcementOn && (
+                <div role="group" aria-label="Mode filter" className="flex rounded-lg border border-line overflow-hidden shrink-0">
+                  {MODE_FILTERS.map((f) => (
+                    <button
+                      key={f.value}
+                      type="button"
+                      aria-pressed={modeFilter === f.value}
+                      onClick={() => setModeFilter(f.value)}
+                      className={`px-3 py-1.5 text-xs font-medium border-r border-line last:border-r-0 transition-colors ${
+                        modeFilter === f.value ? "bg-primary text-white" : "bg-surface text-chalk-dim hover:bg-surface-2"
+                      }`}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
@@ -501,6 +592,26 @@ export default function BlacklistPage() {
                 >
                   Nonaktifkan
                 </button>
+                {enforcementOn && isAdmin && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => openModeDialog(undefined, "enforce")}
+                      disabled={busy}
+                      className="px-3 py-1.5 rounded-lg bg-surface border border-line text-xs font-medium text-chalk hover:bg-surface-2"
+                    >
+                      Block DNS
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openModeDialog(undefined, "alert")}
+                      disabled={busy}
+                      className="px-3 py-1.5 rounded-lg bg-surface border border-line text-xs font-medium text-chalk hover:bg-surface-2"
+                    >
+                      Monitor only
+                    </button>
+                  </>
+                )}
                 <button
                   type="button"
                   onClick={() => setDeleteDialog({ open: true, isBatch: true })}
@@ -636,6 +747,7 @@ export default function BlacklistPage() {
                             {e.source && e.source !== "manual" && (
                               <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-surface-3 text-chalk-faint border border-line">{e.source}</span>
                             )}
+                            {(enforcementOn || e.block_mode === "enforce") && <ModeBadge entry={e} />}
                           </div>
                           {(e.description || e.created_at) && (
                             <p className="text-xs text-chalk-faint mt-1 truncate">
@@ -743,6 +855,15 @@ export default function BlacklistPage() {
                                   </>
                                 )}
                               </button>
+                              {enforcementOn && isAdmin && (
+                                <button
+                                  type="button"
+                                  onClick={() => openModeDialog(e, e.block_mode === "enforce" ? "alert" : "enforce")}
+                                  className="w-full px-3.5 py-2 flex items-center gap-2 text-chalk hover:bg-surface-2 transition-colors font-medium"
+                                >
+                                  {e.block_mode === "enforce" ? "Switch to Monitor" : "Block at DNS"}
+                                </button>
+                              )}
                               <div className="border-t border-line my-1" />
                               <button
                                 type="button"
@@ -787,7 +908,7 @@ export default function BlacklistPage() {
                               <p className="font-mono text-sm font-semibold text-chalk break-all">
                                 {e.domain}
                               </p>
-                              <div className="flex items-center gap-2 mt-1">
+                              <div className="flex flex-wrap items-center gap-2 mt-1">
                                 {e.is_active ? (
                                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-safe/10 text-safe border border-safe/20">
                                     <span className="w-1.5 h-1.5 rounded-full bg-safe" />
@@ -802,6 +923,7 @@ export default function BlacklistPage() {
                                 <span className="text-xs text-chalk-dim">
                                   {typeLabel(e.type)}
                                 </span>
+                                {(enforcementOn || e.block_mode === "enforce") && <ModeBadge entry={e} />}
                               </div>
                             </div>
                           </div>
@@ -841,6 +963,15 @@ export default function BlacklistPage() {
                                 >
                                   {e.is_active ? "Nonaktifkan" : "Aktifkan"}
                                 </button>
+                                {enforcementOn && isAdmin && (
+                                  <button
+                                    type="button"
+                                    onClick={() => openModeDialog(e, e.block_mode === "enforce" ? "alert" : "enforce")}
+                                    className="w-full px-4 py-2.5 flex items-center gap-2.5 text-chalk hover:bg-surface-2 text-sm font-medium"
+                                  >
+                                    {e.block_mode === "enforce" ? "Switch to Monitor" : "Block at DNS"}
+                                  </button>
+                                )}
                                 <div className="border-t border-line my-1" />
                                 <button
                                   type="button"
@@ -884,6 +1015,17 @@ export default function BlacklistPage() {
           )}
         </section>
       </div>
+
+      {/* Dialog konfirmasi mode (Monitor / Block DNS) */}
+      {modeDialog?.open && (
+        <ModeDialog
+          key={modeDialog.entry?._id ?? "bulk"}
+          state={modeDialog}
+          busy={modeBusy}
+          onCancel={() => setModeDialog(null)}
+          onConfirm={(c) => void applyMode(c)}
+        />
+      )}
 
       {/* Modal Dialog Konfirmasi Hapus */}
       {deleteDialog.open && (

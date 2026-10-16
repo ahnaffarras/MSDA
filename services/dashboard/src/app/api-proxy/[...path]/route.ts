@@ -40,6 +40,20 @@ const fail = (error: string, code: string, status: number) =>
 /** Aksi notifikasi yang dicatat ke audit log (hanya yang mengubah data). */
 function auditFor(method: string, segments: string[], body: string) {
   if (READ_METHODS.has(method)) return null
+  // AdGuard enforcement: sinkronisasi manual & sakelar protection dicatat (D7)
+  if (segments[0] === 'v1' && segments[1] === 'adguard') {
+    const last = segments[segments.length - 1]
+    let p: Record<string, unknown> = {}
+    try {
+      const x: unknown = body ? JSON.parse(body) : {}
+      if (typeof x === 'object' && x !== null && !Array.isArray(x)) p = x as Record<string, unknown>
+    } catch {
+      /* body bukan JSON */
+    }
+    if (last === 'sync') return { action: 'adguard.sync' as const, targetId: undefined, meta: {} }
+    if (last === 'protection') return { action: 'adguard.protection' as const, targetId: undefined, meta: { enabled: p.enabled } }
+    return null
+  }
   // segments contoh: ['v1','notifications',<id>,'status'] | ['v1','notifications','bulk-status'] | ['v1','notifications','read-all']
   if (segments[0] !== 'v1' || segments[1] !== 'notifications') return null
   let parsed: Record<string, unknown> = {}

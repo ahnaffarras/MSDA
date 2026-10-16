@@ -1,6 +1,13 @@
 import { ListUl } from "@gravity-ui/icons";
 import { riskLevelFromType, RISK_COLOR, RISK_LABEL } from "@/lib/domain-risk";
 import { formatTimeWIB } from "@/lib/format";
+import { actionLabel, actionTone } from "@/lib/labels";
+
+const TONE_STYLE = {
+  blocked: { color: "var(--accent-flag)", backgroundColor: "var(--accent-flag-bg)" },
+  monitor: { color: "var(--accent-watch)", backgroundColor: "var(--accent-watch-bg)" },
+  allowed: { color: "var(--accent-safe)", backgroundColor: "var(--accent-safe-bg)" },
+} as const;
 import type { LabGridAP } from "@/lib/types";
 
 export function ActivityLog({ labGrid }: { labGrid: LabGridAP[] }) {
@@ -54,12 +61,9 @@ export function ActivityLog({ labGrid }: { labGrid: LabGridAP[] }) {
                     <td className="py-2 pr-3">
                       <span
                         className="rounded px-2 py-0.5 text-xs font-medium"
-                        style={{
-                          color:           row.last_action === "blocked" ? "var(--accent-flag)" : "var(--accent-safe)",
-                          backgroundColor: row.last_action === "blocked" ? "var(--accent-flag-bg)" : "var(--accent-safe-bg)",
-                        }}
+                        style={TONE_STYLE[actionTone(row.last_action, row.last_enforced)]}
                       >
-                        {row.last_action === "blocked" ? "Blocked" : "Allowed"}
+                        {actionLabel(row.last_action, row.last_enforced)}
                       </span>
                     </td>
                     <td className="py-2">
