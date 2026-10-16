@@ -146,6 +146,15 @@ Daftar domain yang wajib diblokir / trigger notifikasi. **Dikelola manual oleh a
 | `expires_at` | Date \| null | No | **Baru.** Akhir masa blokir. `null`/tidak ada = permanen. Dashboard mengisinya sebagai akhir hari WIB (23:59:59.999) | `ISODate("2026-12-31T16:59:59.999Z")` |
 | `source` | String | No | **Baru.** Asal entri. Default `manual` bila tidak ada | `"manual"` \| `"feed"` \| `"auto"` \| `"import"` |
 | `note` | String | No | **Baru.** Catatan (maks. 300). Disalin juga ke `description` bila `description` kosong | `"Sesuai tata tertib"` |
+| `block_mode` | String | No | **Baru (DNS enforcement).** `alert` (default bila kosong) = hanya memantau; `enforce` = diblokir di DNS lewat AdGuard Home **dan** tetap memicu alert | `"alert"` \| `"enforce"` |
+| `include_subdomains` | Boolean | No | **Baru.** Default `true` → aturan `\|\|domain^` (domain + semua subdomain). `false` → `\|domain^` (hanya domain persis) | `true` |
+| `enforce_status` | String | No | **Baru.** Diisi dashboard/backend, hanya untuk `block_mode:"enforce"`: `pending` \| `synced` \| `error` | `"synced"` |
+| `enforce_synced_at` | Date | No | **Baru.** Waktu terakhir aturan berhasil disinkronkan | `ISODate("2026-10-15T08:00:00Z")` |
+| `enforce_error` | String | No | **Baru.** Alasan, hanya bila `enforce_status` ≠ `synced` | `"TLD / public suffix cannot be blocked"` |
+
+> **DNS enforcement (opsional).** Sumber kebenaran aturan AdGuard adalah koleksi ini. Backend Go membangun ulang aturan secara penuh dan idempoten (lihat `docs/adguard.md`). Entri `is_active:false`, kedaluwarsa, atau tercakup `dns_allowlist` **tidak** ikut aturan. Entri `blocked_level:"group"` diperluas backend menjadi semua domain `dns_info` dengan `group` yang sama. **Catatan n8n v9:** workflow saat ini membuang entri tanpa `domain`, jadi entri `group` tidak memicu alert walau didukung di DNS.
+>
+> **`ip_access_dns`** mendapat field opsional `block_mode` dan `enforced` (boolean). `action:"blocked"` **tetap** berarti "cocok blocklist"; UI hanya menampilkan "Blocked" bila `enforced === true`. Koleksi baru `adguard_sync_state` (satu dokumen `_id:"main"`): `last_hash`, `last_sync_at`, `rule_count`, `status` (`ok`\|`error`), `error`, `agh_version`.
 
 > **Kontrak untuk n8n (semua aditif).** Sebuah entri *hanya berlaku* bila `is_active != false` **dan** (`expires_at` kosong **atau** `expires_at > sekarang`) **dan** domain tidak tercakup `dns_allowlist`. n8n yang belum mengenal field baru tetap berjalan seperti sebelumnya, tetapi akan tetap memblokir entri yang sudah kedaluwarsa sampai logikanya diperbarui.
 

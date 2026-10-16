@@ -129,6 +129,14 @@ Responsible for who can see and change what.
 - The dashboard polls `unread-count` every 20 seconds (paused while the tab is hidden) to drive the sidebar badge, toasts and automatic list refresh
 - Channel routing (Slack/Telegram), minimum severity, batching and quiet hours live in `notification_settings`; n8n reads them, and bot tokens stay in n8n only
 
+### 8. DNS Enforcement Module (optional)
+
+- Off by default (`MSDA_ENFORCEMENT_ENABLED=false`); AdGuard Home runs only under the Compose profile `enforcement`
+- Each blocklist entry has a mode: **Monitor** (alert only, the original behaviour) or **Block DNS** (blocked by AdGuard and still alerted)
+- MongoDB `dns_blacklist` is the single source of truth; the Go backend generates the full AdGuard rule set (`||domain^`) idempotently, on every blocklist change, on a timer and at startup. n8n never calls AdGuard; it only reads `GET /api/v1/webhooks/adguard-status`
+- MikroTik stays the clients' first resolver (logging pipeline unchanged) and AdGuard is its only upstream, so per-client attribution always comes from MikroTik logs
+- Details, limits (DNS cache, DoH/DoT bypass, no block page) and rollback: [docs/adguard.md](docs/adguard.md)
+
 ## Data Model Direction
 
 The system should eventually support the following data categories:

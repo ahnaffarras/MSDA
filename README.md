@@ -37,6 +37,7 @@ The current repository includes the initial foundation for:
 - n8n for workflow orchestration
 - Vector as the log parsing engine
 - a Next.js dashboard for visualization
+- optional DNS enforcement: AdGuard Home can actually block blocklist entries set to **Block DNS** (off by default, see [docs/adguard.md](docs/adguard.md))
 
 ## Installation
 
