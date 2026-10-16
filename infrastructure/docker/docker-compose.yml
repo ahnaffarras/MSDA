@@ -5,6 +5,7 @@
 #   5678  n8n                 (sebaiknya di belakang reverse proxy + autentikasi)
 #   514   vector (udp/tcp)    (syslog dari MikroTik)
 #   8686  vector API          (hanya 127.0.0.1)
+#   53    adguard (tcp/udp)   (HANYA bila --profile enforcement; di-bind ke ${MSDA_HOST_IP})
 # MongoDB, Redis, dan backend TIDAK terbuka dari host; antar-layanan bicara lewat
 # jaringan Docker (mongo, redis, backend:8080). Untuk pengembangan lokal pakai:
 #   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
@@ -109,6 +110,34 @@ services:
       retries: 1
       start_period: 30m
 
+  # ── DNS Enforcement (OPSIONAL) ───────────────────────────────────────────
+  # Hanya berjalan dengan:  docker compose --profile enforcement up -d
+  # Tanpa profile ini service di bawah diabaikan dan MSDA berjalan seperti biasa.
+  # Panduan: docs/adguard.md. Konfigurasi awal: infrastructure/adguard/init.sh
+  adguard:
+    # Versi DIPIN (bukan latest). Naikkan hanya setelah memeriksa openapi.yaml versi baru.
+    image: adguard/adguardhome:v0.107.79
+    container_name: msda-adguard
+    profiles: ["enforcement"]
+    restart: unless-stopped
+    volumes:
+      - adguard-work:/opt/adguardhome/work
+      - adguard-conf:/opt/adguardhome/conf
+    ports:
+      # DNS: HANYA di IP LAN host (jangan 0.0.0.0, jangan ke internet = open resolver).
+      # Default 127.0.0.1 supaya aman bila MSDA_HOST_IP lupa diisi.
+      - "${MSDA_HOST_IP:-127.0.0.1}:53:53/tcp"
+      - "${MSDA_HOST_IP:-127.0.0.1}:53:53/udp"
+      # UI admin: hanya loopback host (untuk wizard / init awal). Backend memakai http://adguard:3000.
+      - "127.0.0.1:${ADGUARD_UI_PORT:-3000}:3000/tcp"
+    healthcheck:
+      # Bekerja baik pada mode wizard (belum diinisialisasi) maupun sesudahnya.
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:3000/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
   backend:
     build:
       context: ../../services/msda-backend
@@ -131,6 +160,14 @@ services:
       MSDA_WEBHOOK_TOKEN: ${MSDA_WEBHOOK_TOKEN:?Set MSDA_WEBHOOK_TOKEN in .env (openssl rand -hex 32)}
       # Dikirim dashboard pada header X-Internal-Token (harus beda dari webhook token)
       MSDA_INTERNAL_TOKEN: ${MSDA_INTERNAL_TOKEN:?Set MSDA_INTERNAL_TOKEN in .env (openssl rand -hex 32)}
+      # DNS Enforcement (opsional; default mati → perilaku identik dengan sebelumnya)
+      MSDA_ENFORCEMENT_ENABLED: ${MSDA_ENFORCEMENT_ENABLED:-false}
+      ADGUARD_URL: ${ADGUARD_URL:-http://adguard:3000}
+      ADGUARD_USER: ${ADGUARD_USER:-}
+      ADGUARD_PASSWORD: ${ADGUARD_PASSWORD:-}
+      ADGUARD_BLOCKING_MODE: ${ADGUARD_BLOCKING_MODE:-null_ip}
+      ADGUARD_SYNC_INTERVAL: ${ADGUARD_SYNC_INTERVAL:-5m}
+      MSDA_NEVER_BLOCK: ${MSDA_NEVER_BLOCK:-}
 
   dashboard:
     build:
@@ -162,6 +199,8 @@ services:
       MSDA_SESSION_HOURS: ${MSDA_SESSION_HOURS:-12}
       MSDA_COOKIE_SECURE: ${MSDA_COOKIE_SECURE:-}
       MSDA_ALLOWED_ORIGINS: ${MSDA_ALLOWED_ORIGINS:-}
+      # Daftar never-block (hanya dibaca untuk validasi awal & tampilan; backend tetap otoritatif)
+      MSDA_NEVER_BLOCK: ${MSDA_NEVER_BLOCK:-}
 
 volumes:
   mongo-data:
@@ -169,3 +208,5 @@ volumes:
   vector-data:
   redis-data:
   backup-data:
+  adguard-work:
+  adguard-conf:
