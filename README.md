@@ -356,3 +356,6 @@ The old `SATA_*` names are no longer supported. Use the `MSDA_*` prefix in `.env
 - Blocked-attempt totals in the daily report and a dedicated `block_attempt` notification type (section 2.11). Blocking public DoH/DoT resolvers stays a separate, optional step.
 - API security hardening, audit log, session management and 2FA, alert management, and trend charts in the dashboard.
 - Scheduled backups and automated CI.
+
+---
+Originally developed as SATA-AI by ahnaffarras, ernestoyoofi, vulviantama, rafiramdhni1, continued as MSDA by ahnaffarras”
