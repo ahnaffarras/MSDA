@@ -52,27 +52,27 @@ func (r *ClientAccessRepo) Stats(ctx context.Context, from, to time.Time) (*mode
 
 	// Per day
 	perDayPipe := mongo.Pipeline{
-		{{"$match", match}},
-		{{"$group", bson.M{
+		bson.D{{Key: "$match", Value: match}},
+		bson.D{{Key: "$group", Value: bson.M{
 			"_id":   bson.M{"$dateToString": bson.M{"format": "%Y-%m-%d", "date": bson.M{"$toDate": "$timestamp"}}},
 			"count": bson.M{"$sum": 1},
 		}}},
-		{{"$sort", bson.D{{Key: "_id", Value: 1}}}},
+		bson.D{{Key: "$sort", Value: bson.D{{Key: "_id", Value: 1}}}},
 	}
 	// Per type
 	perTypePipe := mongo.Pipeline{
-		{{"$match", match}},
-		{{"$group", bson.M{"_id": "$type", "count": bson.M{"$sum": 1}}}},
-		{{"$sort", bson.D{{Key: "count", Value: -1}}}},
+		bson.D{{Key: "$match", Value: match}},
+		bson.D{{Key: "$group", Value: bson.M{"_id": "$type", "count": bson.M{"$sum": 1}}}},
+		bson.D{{Key: "$sort", Value: bson.D{{Key: "count", Value: -1}}}},
 	}
 	// Per AP
 	perAPPipe := mongo.Pipeline{
-		{{"$match", match}},
-		{{"$group", bson.M{
-			"_id":      bson.M{"label": "$ap_info.label", "ip": "$ap_info.ip"},
-			"count":    bson.M{"$sum": 1},
+		bson.D{{Key: "$match", Value: match}},
+		bson.D{{Key: "$group", Value: bson.M{
+			"_id":   bson.M{"label": "$ap_info.label", "ip": "$ap_info.ip"},
+			"count": bson.M{"$sum": 1},
 		}}},
-		{{"$sort", bson.D{{Key: "count", Value: -1}}}},
+		bson.D{{Key: "$sort", Value: bson.D{{Key: "count", Value: -1}}}},
 	}
 
 	var stats model.ClientAccessStats
@@ -148,25 +148,25 @@ func (r *ClientAccessRepo) Summary(ctx context.Context, from, to time.Time) (*mo
 
 func (r *ClientAccessRepo) LabGrid(ctx context.Context, from time.Time) ([]model.LabGridAP, error) {
 	pipe := mongo.Pipeline{
-		{{"$match", TimeRange(from, time.Now().UTC().Add(time.Minute))}},
-		{{"$sort", bson.D{{Key: "timestamp", Value: -1}}}},
-		{{"$group", bson.M{
-			"_id":        bson.M{"client_ip": "$client_ip", "ap_ip": "$ap_info.ip", "ap_label": "$ap_info.label"},
-			"last_domain": bson.M{"$first": "$domain"},
-			"last_action": bson.M{"$first": "$action"},
+		bson.D{{Key: "$match", Value: TimeRange(from, time.Now().UTC().Add(time.Minute))}},
+		bson.D{{Key: "$sort", Value: bson.D{{Key: "timestamp", Value: -1}}}},
+		bson.D{{Key: "$group", Value: bson.M{
+			"_id":           bson.M{"client_ip": "$client_ip", "ap_ip": "$ap_info.ip", "ap_label": "$ap_info.label"},
+			"last_domain":   bson.M{"$first": "$domain"},
+			"last_action":   bson.M{"$first": "$action"},
 			"last_enforced": bson.M{"$first": "$enforced"},
-			"last_seen":   bson.M{"$first": "$timestamp"},
-			"type":        bson.M{"$first": "$type"},
+			"last_seen":     bson.M{"$first": "$timestamp"},
+			"type":          bson.M{"$first": "$type"},
 		}}},
-		{{"$group", bson.M{
-			"_id":     bson.M{"ap_ip": "$_id.ap_ip", "ap_label": "$_id.ap_label"},
+		bson.D{{Key: "$group", Value: bson.M{
+			"_id": bson.M{"ap_ip": "$_id.ap_ip", "ap_label": "$_id.ap_label"},
 			"clients": bson.M{"$push": bson.M{
-				"client_ip":   "$_id.client_ip",
-				"last_domain": "$last_domain",
-				"last_action": "$last_action",
+				"client_ip":     "$_id.client_ip",
+				"last_domain":   "$last_domain",
+				"last_action":   "$last_action",
 				"last_enforced": "$last_enforced",
-				"last_seen":   "$last_seen",
-				"type":        "$type",
+				"last_seen":     "$last_seen",
+				"type":          "$type",
 			}},
 		}}},
 	}
@@ -209,13 +209,13 @@ func (r *ClientAccessRepo) TopDomains(ctx context.Context, from, to time.Time, d
 		match["type"] = domainType
 	}
 	pipe := mongo.Pipeline{
-		{{"$match", match}},
-		{{"$group", bson.M{
+		bson.D{{Key: "$match", Value: match}},
+		bson.D{{Key: "$group", Value: bson.M{
 			"_id":   bson.M{"domain": "$domain", "group": "$group", "type": "$type"},
 			"count": bson.M{"$sum": 1},
 		}}},
-		{{"$sort", bson.D{{Key: "count", Value: -1}}}},
-		{{"$limit", int64(limit)}},
+		bson.D{{Key: "$sort", Value: bson.D{{Key: "count", Value: -1}}}},
+		bson.D{{Key: "$limit", Value: int64(limit)}},
 	}
 	cur, err := r.col.Aggregate(ctx, pipe)
 	if err != nil {
@@ -242,13 +242,13 @@ func (r *ClientAccessRepo) TopClients(ctx context.Context, from, to time.Time, l
 	match := TimeRange(from, to)
 	match["action"] = "blocked"
 	pipe := mongo.Pipeline{
-		{{"$match", match}},
-		{{"$group", bson.M{
-			"_id":      bson.M{"client_ip": "$client_ip", "ap_label": "$ap_info.label"},
-			"count":    bson.M{"$sum": 1},
+		bson.D{{Key: "$match", Value: match}},
+		bson.D{{Key: "$group", Value: bson.M{
+			"_id":   bson.M{"client_ip": "$client_ip", "ap_label": "$ap_info.label"},
+			"count": bson.M{"$sum": 1},
 		}}},
-		{{"$sort", bson.D{{Key: "count", Value: -1}}}},
-		{{"$limit", int64(limit)}},
+		bson.D{{Key: "$sort", Value: bson.D{{Key: "count", Value: -1}}}},
+		bson.D{{Key: "$limit", Value: int64(limit)}},
 	}
 	cur, err := r.col.Aggregate(ctx, pipe)
 	if err != nil {
