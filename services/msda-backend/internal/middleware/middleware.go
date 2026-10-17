@@ -35,20 +35,12 @@ func Logger() gin.HandlerFunc {
 func CORS() gin.HandlerFunc {
 	allowedOrigins := strings.TrimSpace(os.Getenv("ALLOWED_ORIGINS"))
 	return func(c *gin.Context) {
-<<<<<<< HEAD
-		c.Header("Access-Control-Allow-Origin", allowedOrigins)
-		c.Header("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS")
-		c.Header("Access-Control-Allow-Headers", "Content-Type,Authorization,X-MSDA-Token")
-		c.Header("Access-Control-Allow-Credentials", "true")
-
-=======
 		if allowedOrigins != "" {
 			c.Header("Access-Control-Allow-Origin", allowedOrigins)
 			c.Header("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS")
 			c.Header("Access-Control-Allow-Headers", "Content-Type,X-MSDA-Token,X-Internal-Token")
 			c.Header("Vary", "Origin")
 		}
->>>>>>> 478bbba (modified backend for update msda)
 		if c.Request.Method == http.MethodOptions {
 			c.AbortWithStatus(http.StatusNoContent)
 			return
@@ -67,51 +59,11 @@ func secureEqual(a, b string) bool {
 	return subtle.ConstantTimeCompare(ha[:], hb[:]) == 1
 }
 
-<<<<<<< HEAD
-func jwtSecret() []byte {
-	s := os.Getenv("JWT_SECRET")
-	if s == "" {
-		s = "msda-secret-change-me"
-	}
-	return []byte(s)
-}
-
-func GenerateToken(adminID, username, role string) (string, error) {
-	claims := Claims{
-		AdminID:  adminID,
-		Username: username,
-		Role:     role,
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-		},
-	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(jwtSecret())
-}
-
-func ParseToken(tokenStr string) (*Claims, error) {
-	token, err := jwt.ParseWithClaims(tokenStr, &Claims{}, func(t *jwt.Token) (interface{}, error) {
-		return jwtSecret(), nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	if claims, ok := token.Claims.(*Claims); ok && token.Valid {
-		return claims, nil
-	}
-	return nil, jwt.ErrTokenInvalidClaims
-}
-
-// RequireAuth validates JWT Bearer token from Authorization header.
-func RequireAuth() gin.HandlerFunc {
-=======
 // requireSharedToken membuat middleware yang menolak request bila header tidak
 // cocok dengan nilai env. GAGAL-TERTUTUP: bila env kosong, SEMUA request ditolak
 // (503), bukan dibiarkan lewat.
 func requireSharedToken(envKey, header string) gin.HandlerFunc {
 	expected := os.Getenv(envKey)
->>>>>>> 478bbba (modified backend for update msda)
 	return func(c *gin.Context) {
 		if expected == "" {
 			log.Printf("[AUTH] %s is not configured; rejecting request to %s", envKey, c.Request.URL.Path)
@@ -126,11 +78,7 @@ func requireSharedToken(envKey, header string) gin.HandlerFunc {
 	}
 }
 
-<<<<<<< HEAD
-// RequireWebhookToken validates the X-MSDA-Token header for n8n webhook calls.
-=======
 // RequireWebhookToken memvalidasi header X-MSDA-Token untuk panggilan webhook n8n.
->>>>>>> 478bbba (modified backend for update msda)
 func RequireWebhookToken() gin.HandlerFunc {
 	return requireSharedToken("MSDA_WEBHOOK_TOKEN", "X-MSDA-Token")
 }
@@ -151,17 +99,9 @@ const actorKey = "msda_actor"
 // sudah lolos lebih dulu. Dipakai untuk mengisi ack_by dan sejenisnya.
 func Actor() gin.HandlerFunc {
 	return func(c *gin.Context) {
-<<<<<<< HEAD
-		expected := os.Getenv("MSDA_WEBHOOK_TOKEN")
-		token := c.GetHeader("X-MSDA-Token")
-		if expected != "" && token != expected {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid webhook token"})
-			return
-=======
 		u := strings.TrimSpace(c.GetHeader("X-MSDA-User"))
 		if len(u) > 64 {
 			u = u[:64]
->>>>>>> 478bbba (modified backend for update msda)
 		}
 		c.Set(actorKey, u)
 		c.Next()
